@@ -18,6 +18,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -55,6 +56,28 @@ class WebSearchClientTest {
         dispatcher = Dispatchers.Unconfined,
         maxPagesToFetch = maxPagesToFetch,
     )
+
+    @Test
+    fun `a search result pointing at a private address is not fetched`() = runBlocking {
+        val fetcher = HttpPageFetcher(OkHttpClient(), dispatcher = Dispatchers.Unconfined)
+        val outcome = fetcher.fetch("http://169.254.169.254/latest/meta-data/")
+
+        assertNull(outcome)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `an oversized search response is rejected instead of parsed`() {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"results\":[" + "x".repeat(2 * 1024 * 1024) + "]}"),
+        )
+
+        val outcome = runBlocking { client().search("kotlin") }
+
+        assertEquals(SearchOutcome.Failure(SearchError.InvalidResponse), outcome)
+    }
 
     @Test
     fun `searxng json response parses results correctly without requiring an api key`() {

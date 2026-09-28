@@ -145,6 +145,19 @@ class ChatRepository(
         return buildShareText(title, messages)
     }
 
+    private fun dropTrailingEmptyAssistant(messages: MutableList<UiMessage>): MutableList<UiMessage> {
+        while (messages.isNotEmpty()) {
+            val last = messages.last()
+            val isEmptyAnswer = last.role == Role.ASSISTANT &&
+                last.content.isBlank() &&
+                last.reasoning.isBlank() &&
+                last.sources.isEmpty()
+            if (!isEmptyAnswer) break
+            messages.removeAt(messages.lastIndex)
+        }
+        return messages
+    }
+
     suspend fun setSearchEnabled(enabled: Boolean) {
         _uiState.update { it.copy(searchEnabled = enabled, searchNotice = null) }
         store?.let { s ->
@@ -161,7 +174,13 @@ class ChatRepository(
     }
 
     private suspend fun runWebSearch(query: String): List<SearchResult> {
-        val result = runCatching { searchController.executeSearch(query) }.getOrNull()
+        val result = try {
+            searchController.executeSearch(query)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         if (result != null && result.noticeMessage != null) {
             setSearchNotice(result.noticeMessage)
         }
@@ -380,7 +399,7 @@ class ChatRepository(
                 )
             }
             ?: conversationSnapshots[id].orEmpty()
-        val restored = messages.toMutableList()
+        val restored = dropTrailingEmptyAssistant(messages.toMutableList())
         restored.forEachIndexed { index, message ->
             if (message.role == Role.ASSISTANT && message.sources.isNotEmpty()) {
                 for (j in index - 1 downTo 0) {
@@ -505,6 +524,7 @@ class ChatRepository(
         targetConversationId: String,
     ) {
         val suggester = followUpSuggestions ?: return
+        if (_uiState.value.conversationId != targetConversationId) return
         val answer = _uiState.value.messages.firstOrNull { it.id == assistantId }?.content.orEmpty()
         if (question.isBlank() || !FollowUpSuggestions.isWorthSuggesting(answer)) return
         val suggestions = try {

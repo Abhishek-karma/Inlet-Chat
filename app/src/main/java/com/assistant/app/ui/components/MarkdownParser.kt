@@ -349,7 +349,7 @@ object MarkdownParser {
         while (index < limit) {
             val next = firstMarker(text, index, limit) ?: break
             if (next > index) {
-                append(text.substring(index, next))
+                append(text, index, next)
             }
             val consumed = when (text[next]) {
                 '`' -> appendBackticks(text, next, limit, codeBackground)
@@ -366,7 +366,7 @@ object MarkdownParser {
             }
         }
         if (index < limit) {
-            append(text.substring(index, limit))
+            append(text, index, limit)
         }
     }
 

@@ -23,6 +23,7 @@ class HttpPageFetcher(
     override suspend fun fetch(url: String): String? = withContext(dispatcher) {
         val parsed = url.toHttpUrlOrNull() ?: return@withContext null
         if (parsed.scheme != "https" && parsed.scheme != "http") return@withContext null
+        if (isPrivateHost(parsed.host)) return@withContext null
 
         val request = Request.Builder()
             .url(parsed)
@@ -76,6 +77,32 @@ class HttpPageFetcher(
             contentType.contains("application/xhtml+xml") ||
             contentType.contains("application/xml") ||
             contentType.contains("text/markdown")
+
+    /**
+     * Search results are attacker-influenceable, so a result pointing at
+     * loopback, link-local, or a private range must not be fetched: that would
+     * let a page reach services on the user's own network or device.
+     */
+    internal fun isPrivateHost(host: String): Boolean {
+        val h = host.trim('[', ']').lowercase()
+        if (h == "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) {
+            return true
+        }
+        if (h == "::1" || h == "0:0:0:0:0:0:0:1") return true
+        val parts = h.split('.')
+        if (parts.size == 4 && parts.all { it.toIntOrNull()?.let(::isOctet) == true }) {
+            val a = parts[0].toInt()
+            val b = parts[1].toInt()
+            if (a == 10 || a == 127 || a == 0) return true
+            if (a == 192 && b == 168) return true
+            if (a == 172 && b in 16..31) return true
+            if (a == 169 && b == 254) return true
+        }
+        if (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true
+        return false
+    }
+
+    private fun isOctet(value: Int): Boolean = value in 0..255
 
     companion object {
         const val MAX_PAGE_BYTES = 512 * 1024 // 512 KB

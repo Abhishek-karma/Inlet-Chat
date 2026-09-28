@@ -78,6 +78,9 @@ private val USER_BUBBLE_SHAPE = AppShape.userBubble
 private val USER_BUBBLE_MAX_WIDTH = 340.dp
 private const val WAITING_DELAY_MILLIS = 350L
 
+internal fun isWebUrl(url: String): Boolean =
+    url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)
+
 /**
  * Nara Message Transcript: Content-first conversation stream optimized for reading comfort.
  */
@@ -531,7 +534,7 @@ private fun SearchCitationsList(sources: List<SearchResult>) {
     Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
         sources.forEach { source ->
             Surface(
-                onClick = { runCatching { uriHandler.openUri(source.url) } },
+                onClick = { if (isWebUrl(source.url)) uriHandler.openUri(source.url) },
                 shape = AppShape.small,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),

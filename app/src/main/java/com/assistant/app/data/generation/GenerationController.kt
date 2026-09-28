@@ -36,6 +36,8 @@ class GenerationController(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val mutex = Mutex()
+
+    @Volatile
     private var activeSession: GenerationSession? = null
     private var lastPersistAt: Long = 0L
 

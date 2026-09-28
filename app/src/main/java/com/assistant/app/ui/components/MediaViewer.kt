@@ -2,6 +2,8 @@ package com.assistant.app.ui.components
 
 import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.graphics.Bitmap
@@ -118,8 +120,9 @@ fun AttachmentThumbnail(attachment: UiAttachment, onClick: () -> Unit) {
         )
         return
     }
+    val imageBitmap = remember(image.bitmap) { image.bitmap.asImageBitmap() }
     Image(
-        bitmap = image.bitmap.asImageBitmap(),
+        bitmap = imageBitmap,
         contentDescription = attachment.displayName,
         contentScale = ContentScale.Crop,
         modifier = Modifier
@@ -196,9 +199,6 @@ fun ImageViewerDialog(attachment: UiAttachment, onDismiss: () -> Unit) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun DiagramViewerDialog(code: String, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    var webView by remember { mutableStateOf<WebView?>(null) }
-
     Dialog(onDismissRequest = onDismiss) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -212,10 +212,23 @@ fun DiagramViewerDialog(code: String, onDismiss: () -> Unit) {
                             settings.javaScriptEnabled = true
                             settings.allowFileAccess = true
                             settings.allowContentAccess = false
+                            settings.allowFileAccessFromFileURLs = false
+                            settings.allowUniversalAccessFromFileURLs = false
                             settings.domStorageEnabled = false
                             settings.javaScriptCanOpenWindowsAutomatically = false
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            webViewClient = WebViewClient()
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView,
+                                    request: WebResourceRequest,
+                                ): Boolean = true
+
+                                @Suppress("DEPRECATION")
+                                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
+                            }
+                            setDownloadListener { _, _, _, _, _ -> Unit }
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            settings.safeBrowsingEnabled = true
                             addJavascriptInterface(
                                 object {
                                     @JavascriptInterface
@@ -230,7 +243,6 @@ fun DiagramViewerDialog(code: String, onDismiss: () -> Unit) {
                                 "utf-8",
                                 null,
                             )
-                            webView = this
                         }
                     },
                     onRelease = { view ->
@@ -282,6 +294,7 @@ private fun ViewerMessage(message: String?) {
 private fun ZoomableImage(bitmap: Bitmap, contentDescription: String?, modifier: Modifier = Modifier) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     Box(
         modifier = modifier.pointerInput(Unit) {
             detectTransformGestures { _, pan, zoom, _ ->
@@ -293,7 +306,7 @@ private fun ZoomableImage(bitmap: Bitmap, contentDescription: String?, modifier:
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            bitmap = bitmap.asImageBitmap(),
+            bitmap = imageBitmap,
             contentDescription = contentDescription,
             contentScale = ContentScale.Fit,
             modifier = Modifier

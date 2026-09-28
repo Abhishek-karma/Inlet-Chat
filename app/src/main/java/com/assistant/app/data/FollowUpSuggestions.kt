@@ -42,14 +42,16 @@ object FollowUpSuggestions {
             ),
         )
         val text = StringBuilder()
+        var failed = false
         provider.stream(request).collect { chunk ->
             when (chunk) {
                 is ChatChunk.Delta -> text.append(chunk.text)
                 is ChatChunk.Reasoning -> Unit
                 is ChatChunk.Done -> Unit
-                is ChatChunk.Failure -> throw IllegalStateException(chunk.error.userMessage)
+                is ChatChunk.Failure -> failed = true
             }
         }
+        if (failed) return emptyList()
         return parse(text.toString())
     }
 

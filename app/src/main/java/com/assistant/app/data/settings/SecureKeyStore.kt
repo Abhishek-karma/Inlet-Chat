@@ -55,11 +55,16 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
 
     override fun apiKey(id: Long): String? = preferences?.getString(keyFor(id), null)
 
+    /**
+     * Writes are committed synchronously. Losing an API key to a process death
+     * between the write and the async disk flush would leave the user with a
+     * provider that cannot authenticate and no way to tell why.
+     */
     override fun setApiKey(id: Long, value: String?) {
         val prefs = preferences ?: return
         prefs.edit().apply {
             if (value == null) remove(keyFor(id)) else putString(keyFor(id), value)
-        }.apply()
+        }.commit()
     }
 
     override fun searchApiKey(): String? = preferences?.getString(KEY_SEARCH_API_KEY, null)
@@ -68,13 +73,13 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
         val prefs = preferences ?: return
         prefs.edit().apply {
             if (value == null) remove(KEY_SEARCH_API_KEY) else putString(KEY_SEARCH_API_KEY, value)
-        }.apply()
+        }.commit()
     }
 
     override fun legacyApiKey(): String? = preferences?.getString(KEY_API_KEY, null)
 
     override fun deleteLegacyApiKey() {
-        preferences?.edit()?.remove(KEY_API_KEY)?.apply()
+        preferences?.edit()?.remove(KEY_API_KEY)?.commit()
     }
 
     private fun keyFor(id: Long): String = "${KEY_API_KEY}_$id"

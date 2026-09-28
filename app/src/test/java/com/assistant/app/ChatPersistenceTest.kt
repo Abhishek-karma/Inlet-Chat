@@ -247,6 +247,31 @@ class ChatPersistenceTest {
     }
 
     @Test
+    fun anAnswerInterruptedBeforeAnyTokenIsNotRestoredAsAnEmptyMessage() =
+        runChatTest(helloScript) { _, provider, _, store ->
+            store.createConversation("interrupted", "Interrupted", now = 1)
+            store.appendMessage(
+                com.assistant.app.data.local.MessageEntity("m1", "interrupted", "USER", "question", 1),
+            )
+            store.appendMessage(
+                com.assistant.app.data.local.MessageEntity("m2", "interrupted", "ASSISTANT", "", 2),
+            )
+
+            val chatLlm = MutableStateFlow(ChatLlmState.Ready(provider, SECRET_MARKER_MODEL))
+            val restored = ChatRepository(
+                chatLlm = chatLlm,
+                generationDispatcher = UnconfinedTestDispatcher(testScheduler),
+                store = store,
+                clock = { testScheduler.currentTime },
+            )
+            restored.openConversation("interrupted")
+
+            val state = restored.uiState.value
+            assertEquals(ChatStatus.Idle, state.status)
+            assertEquals(listOf(Role.USER to "question"), state.messages.map { it.role to it.content })
+        }
+
+    @Test
     fun openConversationDuringGenerationStopsAndResets() = runChatTest(
         script = listOf(ScriptedEvent.Delay(100), ScriptedEvent.Emit("Hel"), ScriptedEvent.Delay(100_000)),
     ) { viewModel, provider, repository, store ->

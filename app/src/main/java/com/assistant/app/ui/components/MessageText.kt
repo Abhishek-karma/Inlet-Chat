@@ -32,7 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +55,31 @@ import com.assistant.app.R
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 import com.assistant.app.ui.theme.AppTypographyStyles
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+
+/** How often streamed content is reparsed while it grows. */
+private const val STREAM_PARSE_INTERVAL_MS = 60L
+
+@Composable
+private fun streamingBlocks(text: String, codeBackground: Color, linkColor: Color): List<MessageBlock> {
+    val latest by rememberUpdatedState(text)
+    val initial = remember(codeBackground, linkColor) {
+        MarkdownParser.parse(text, codeBackground, linkColor)
+    }
+    return produceState(initial, codeBackground, linkColor) {
+        var rendered = text
+        while (currentCoroutineContext().isActive) {
+            delay(STREAM_PARSE_INTERVAL_MS)
+            val current = latest
+            if (current != rendered) {
+                rendered = current
+                value = MarkdownParser.parse(current, codeBackground, linkColor)
+            }
+        }
+    }.value
+}
 
 @Composable
 fun MessageText(
@@ -63,8 +89,12 @@ fun MessageText(
 ) {
     val codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest
     val linkColor = MaterialTheme.colorScheme.primary
-    val blocks = remember(text, codeBackground, linkColor) {
-        MarkdownParser.parse(text, codeBackground, linkColor)
+    val blocks = if (streaming) {
+        streamingBlocks(text, codeBackground, linkColor)
+    } else {
+        remember(text, codeBackground, linkColor) {
+            MarkdownParser.parse(text, codeBackground, linkColor)
+        }
     }
 
     // Elegant animated typing cursor for real-time streaming
@@ -288,7 +318,7 @@ private fun TableBlock(table: MessageBlock.Table) {
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     ) {
-        val columnWidths = tableColumnWidths(table)
+        val columnWidths = remember(table) { tableColumnWidths(table) }
         Column(
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())

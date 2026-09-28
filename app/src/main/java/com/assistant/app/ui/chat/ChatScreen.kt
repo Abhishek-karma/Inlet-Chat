@@ -253,8 +253,10 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val atBottom = listState.firstVisibleItemIndex == 0 &&
         listState.firstVisibleItemScrollOffset == 0
-    val lastContentLength = state.messages.lastOrNull()?.content?.length ?: 0
-    LaunchedEffect(state.messages.size, lastContentLength) {
+    val lastMessage = state.messages.lastOrNull()
+    LaunchedEffect(lastMessage?.id, lastMessage?.content?.length) {
+        val atBottom = listState.firstVisibleItemIndex == 0 &&
+            listState.firstVisibleItemScrollOffset == 0
         if (!atBottom) return@LaunchedEffect
         if (isGenerating) {
             listState.scrollToItem(0)

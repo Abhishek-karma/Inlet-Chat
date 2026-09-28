@@ -50,10 +50,17 @@ class ProviderModelsClient(
                     val bodySource = response.body?.source()
                         ?: return@withContext Result.failure(IOException("models response had no body"))
                     // Cap the read: a misbehaving endpoint must not be able
-                    // to grow memory without limit.
-                    bodySource.request(MAX_RESPONSE_CHARS + 1)
-                    val body = bodySource.readUtf8().take(MAX_RESPONSE_CHARS.toInt())
-                    Result.success(parseModelIds(body))
+                    // to grow memory without limit. Anything at or over the
+                    // cap is a broken endpoint, not a listing to truncate —
+                    // a truncated body is not valid JSON and would be
+                    // reported as a confusing parse failure.
+                    bodySource.request(MAX_RESPONSE_BYTES + 1)
+                    if (bodySource.buffer.size > MAX_RESPONSE_BYTES) {
+                        return@withContext Result.failure(
+                            IOException("models response exceeded ${MAX_RESPONSE_BYTES} bytes"),
+                        )
+                    }
+                    Result.success(parseModelIds(bodySource.readUtf8()))
                 }
             } catch (e: IOException) {
                 Result.failure(e)
@@ -84,7 +91,7 @@ class ProviderModelsClient(
     }
 
     companion object {
-        private const val MAX_RESPONSE_CHARS = 512L * 1024
+        private const val MAX_RESPONSE_BYTES = 512L * 1024
 
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .callTimeout(15, TimeUnit.SECONDS)

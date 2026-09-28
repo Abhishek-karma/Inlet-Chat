@@ -2,6 +2,8 @@ package com.assistant.app.ui.components
 
 import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.clickable
@@ -33,6 +35,8 @@ import com.assistant.app.R
 import kotlin.math.ceil
 
 /** Mermaid renderer over the bundled engine, hardened as far as it can be. */
+
+private const val ASSET_SCHEME = "file:///android_asset"
 
 private const val REPORT_JS =
     "function report(){var c=document.getElementById('c');if(c&&window.Android){" +
@@ -111,13 +115,27 @@ private fun RichBlockWebView(html: String, modifier: Modifier = Modifier) {
                     settings.javaScriptEnabled = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = false
+                    settings.allowFileAccessFromFileURLs = false
+                    settings.allowUniversalAccessFromFileURLs = false
                     settings.domStorageEnabled = false
                     settings.databaseEnabled = false
                     settings.javaScriptCanOpenWindowsAutomatically = false
                     settings.setGeolocationEnabled(false)
                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     isVerticalScrollBarEnabled = false
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): Boolean = !request.url.scheme.equals(ASSET_SCHEME, ignoreCase = true)
+
+                        @Suppress("DEPRECATION")
+                        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+                            !url.startsWith(ASSET_SCHEME, ignoreCase = true)
+                    }
+                    setDownloadListener { _, _, _, _, _ -> Unit }
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    settings.safeBrowsingEnabled = true
                     addJavascriptInterface(
                         object {
                             @JavascriptInterface

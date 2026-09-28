@@ -54,9 +54,16 @@ class SearXNGSearchProvider(
         try {
             client.newCall(requestBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful) return@withContext statusFailure(response.code)
-                val body = response.body?.string()
+                val bodySource = response.body?.source()
                     ?: return@withContext SearchOutcome.Failure(SearchError.InvalidResponse)
-                parseResults(body, maxResults)
+                // Cap the read: a public instance must not be able to grow
+                // memory without limit. An oversized body is reported, not
+                // truncated, because a truncated one is invalid JSON anyway.
+                bodySource.request(MAX_RESPONSE_BYTES + 1)
+                if (bodySource.buffer.size > MAX_RESPONSE_BYTES) {
+                    return@withContext SearchOutcome.Failure(SearchError.InvalidResponse)
+                }
+                parseResults(bodySource.readUtf8(), maxResults)
             }
         } catch (e: CancellationException) {
             throw e
@@ -127,6 +134,7 @@ class SearXNGSearchProvider(
 
     companion object {
         const val DEFAULT_ENDPOINT = "https://searx.be/search"
+        private const val MAX_RESPONSE_BYTES = 1024L * 1024
         private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
     }
 }

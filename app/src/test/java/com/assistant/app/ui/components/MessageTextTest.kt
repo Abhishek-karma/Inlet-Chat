@@ -1,6 +1,9 @@
 package com.assistant.app.ui.components
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.graphics.Color
@@ -232,6 +235,21 @@ class MessageTextTest {
         }
 
         composeRule.onNodeWithText("Answer with code and").assertExists()
+    }
+
+    @Test
+    fun streamingTextIsShownAfterTheParseCadence() {
+        var text by mutableStateOf("Growing ans")
+        composeRule.setContent {
+            MaterialTheme { MessageText(text = text, streaming = true) }
+        }
+        composeRule.onNodeWithText("Growing ans", substring = true).assertExists()
+
+        text = "Growing answer text"
+        composeRule.onNodeWithText("Growing ans", substring = true).assertExists()
+
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.onNodeWithText("Growing answer text", substring = true).assertExists()
     }
 
     @Test
