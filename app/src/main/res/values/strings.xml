@@ -92,6 +92,7 @@
     <!-- Shown before any provider has been added. -->
     <string name="settings_provider_none">No provider yet. Add one to start chatting.</string>
     <string name="settings_add_provider">Add provider</string>
+    <string name="settings_quick_presets">Quick presets</string>
     <string name="settings_active">Active</string>
     <string name="settings_delete">Delete</string>
     <string name="settings_cancel">Cancel</string>

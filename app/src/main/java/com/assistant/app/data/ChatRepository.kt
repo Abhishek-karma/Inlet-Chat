@@ -1,5 +1,6 @@
 package com.assistant.app.data
 
+import android.util.Base64
 import com.assistant.app.data.local.AttachmentEntity
 import com.assistant.app.data.local.ConversationEntity
 import com.assistant.app.data.local.MessageEntity
@@ -19,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -30,56 +32,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withTimeout
-import android.util.Base64
 import java.io.File
 import java.util.UUID
-
-sealed interface ChatStatus {
-    data object Idle : ChatStatus
-    data object Generating : ChatStatus
-    data class Error(val message: String) : ChatStatus
-}
-
-/** Voice state, layered on the text pipeline instead of a second chat flow. */
-enum class VoiceStatus { Idle, Listening, Transcribing, Speaking }
-
-data class ChatUiState(
-    val conversationId: String? = null,
-    val messages: List<UiMessage> = emptyList(),
-    val status: ChatStatus = ChatStatus.Idle,
-    val draft: String = "",
-    val needsSetup: Boolean = false,
-    val voiceStatus: VoiceStatus = VoiceStatus.Idle,
-    /** One-shot "didn't catch that" hint above the composer. */
-    val voiceHint: Boolean = false,
-    /** Files staged in the composer for the next message. */
-    val pendingAttachments: List<UiAttachment> = emptyList(),
-    /** One-shot attachment ingest/limit error above the composer. */
-    val attachmentError: String? = null,
-    /** Web search for the current conversation. */
-    val searchEnabled: Boolean = false,
-    /** One-shot web-search notice above the composer. */
-    val searchNotice: String? = null,
-)
-
-/**
- * The generation wiring resolved from the active provider.
- *
- * [NeedsSetup] means there is no usable provider, so sends are refused and the
- * setup prompt shows. [Ready] is rebuilt whenever the configuration changes.
- */
-sealed interface ChatLlmState {
-    data object Loading : ChatLlmState
-    data class Ready(
-        val provider: LlmProvider,
-        val model: String,
-        val providerId: Long = 0,
-        val name: String = "",
-    ) : ChatLlmState
-    data object NeedsSetup : ChatLlmState
-}
 
 /**
  * Owns the conversation: the message list, the in-flight generation job, and
@@ -247,7 +202,6 @@ class ChatRepository(
             setSearchNotice(SEARCH_NOT_CONFIGURED)
             return emptyList()
         }
-        // A throwing search service is an outcome, not a crash.
         val outcome = try {
             search(query)
         } catch (e: CancellationException) {
@@ -287,19 +241,13 @@ class ChatRepository(
 
     suspend fun send(text: String) {
         val content = text.trim()
-        // An attachment-only send (blank text) is allowed.
         if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) || isGenerating()) return
-        // Reserve the generation slot before any suspension (search, store
-        // writes): a second send during that window must not start a parallel
-        // generation, and stop() must reach the in-flight preparation.
         val job = currentCoroutineContext().job
         generationJob = job
         _uiState.update { it.copy(status = ChatStatus.Generating) }
         try {
             sendPrepared(text, content, job)
         } catch (e: CancellationException) {
-            // Stopped during search/preparation: settle what startGeneration
-            // would have settled.
             _uiState.update { state ->
                 if (generationJob === job && state.status is ChatStatus.Generating) {
                     state.copy(status = ChatStatus.Idle)
@@ -365,8 +313,6 @@ class ChatRepository(
 
     suspend fun retry() {
         if (_uiState.value.status !is ChatStatus.Error || isGenerating()) return
-        // Checked before touching the conversation so an unconfigured provider
-        // leaves the message list and error status untouched.
         if (currentLlm() == null) {
             refuseWithoutLlm()
             return
@@ -405,8 +351,6 @@ class ChatRepository(
         val state = _uiState.value
         val last = state.messages.lastOrNull()
         if (state.status !is ChatStatus.Idle || isGenerating() || last?.role != Role.ASSISTANT) return
-        // Checked before touching the conversation so an unconfigured provider
-        // leaves the message list untouched.
         val llm = currentLlm() ?: run {
             refuseWithoutLlm()
             return
@@ -423,16 +367,12 @@ class ChatRepository(
     }
 
     /**
-     * Shows answer [index] of an assistant message. The selected answer becomes
-     * the message content, so the conversation continues from it; the replaced
-     * answer's follow-up suggestions are dropped.
+     * Shows answer [index] of an assistant message.
      */
     suspend fun switchVersion(messageId: String, index: Int) {
         if (_uiState.value.status !is ChatStatus.Idle || isGenerating()) return
         val versions = versionCache.versionsOf(messageId) ?: return
         if (index !in versions.indices) return
-        // Content restored after a process death mid-stream may not have a
-        // version row yet; snapshot it so switching cannot lose the only copy.
         snapshotVersion(messageId)
         val current = versionCache.versionsOf(messageId).orEmpty()
         if (index !in current.indices) return
@@ -464,14 +404,11 @@ class ChatRepository(
     }
 
     /**
-     * Truncates the conversation at the given user message (everything after it
-     * is removed), replaces its content, and re-requests from there.
+     * Truncates the conversation at the given user message, replaces its content, and re-requests.
      */
     suspend fun editAndResend(messageId: String, newContent: String) {
         val content = newContent.trim()
         if (content.isEmpty() || isGenerating()) return
-        // Checked before truncating so an unconfigured provider leaves the
-        // conversation untouched.
         if (currentLlm() == null) {
             refuseWithoutLlm()
             return
@@ -482,7 +419,6 @@ class ChatRepository(
         if (index < 0) return
         failedAssistantId = null
         val edited = current.messages[index].copy(content = content)
-        // The edited content came from the composer, so the draft is consumed.
         _uiState.update { it.copy(messages = it.messages.take(index) + edited, draft = "") }
         current.messages.drop(index + 1).forEach { versionCache.remove(it.id) }
         store?.let { s ->
@@ -503,8 +439,6 @@ class ChatRepository(
         discardStagedAttachments()
         versionCache.clear()
         _uiState.update {
-            // The draft belonged to the conversation being left; a fresh one
-            // starts with an empty composer.
             it.copy(
                 conversationId = null,
                 messages = emptyList(),
@@ -519,10 +453,8 @@ class ChatRepository(
     }
 
     /**
-     * Opens a saved conversation: stops any active generation (its partial
-     * content is persisted first), clears the leftover draft, and reloads
-     * everything from the store — so this also restores state after process
-     * death. Without a store, the in-session snapshot is used.
+     * Opens a saved conversation: stops active generation, clears leftover draft,
+     * and reloads everything from the store.
      */
     suspend fun openConversation(id: String) {
         if (_uiState.value.conversationId == id) return
@@ -559,8 +491,6 @@ class ChatRepository(
                 )
             }
             ?: conversationSnapshots[id].orEmpty()
-        // Answers restored with persisted sources re-arm their user
-        // message's web context, so regenerate/retry keep grounding.
         val restored = messages.toMutableList()
         restored.forEachIndexed { index, message ->
             if (message.role == Role.ASSISTANT && message.sources.isNotEmpty()) {
@@ -588,8 +518,7 @@ class ChatRepository(
     }
 
     /**
-     * Removes a conversation from history. Deleting the open one also resets
-     * the screen, so a later send cannot append to a missing conversation.
+     * Removes a conversation from history.
      */
     suspend fun deleteConversation(id: String) {
         if (_uiState.value.conversationId == id) {
@@ -614,21 +543,12 @@ class ChatRepository(
         deleteFiles(store?.deleteConversation(id).orEmpty())
     }
 
-    /** The configured generation wiring, or null while setup is required. */
     private fun currentLlm(): ChatLlmState.Ready? = chatLlm.value as? ChatLlmState.Ready
 
-    /** Shows the setup prompt; used when an intent needs the provider and none is configured. */
     private fun refuseWithoutLlm() {
         _uiState.update { it.copy(needsSetup = true) }
     }
 
-    /**
-     * Runs one generation: collects the provider stream into the assistant
-     * placeholder, then settles into Idle or Error.
-     *
-     * On cancellation the partial content is persisted and kept, and the status
-     * returns to Idle, so nothing gets stuck.
-     */
     private suspend fun startGeneration(
         llm: ChatLlmState.Ready,
         assistantId: String,
@@ -664,16 +584,10 @@ class ChatRepository(
                     }
             }
         } catch (e: CancellationException) {
-            // Persist the partial content even though this coroutine is
-            // cancelled (the store calls suspend, hence NonCancellable). The
-            // partial answer also becomes a version: stopping keeps it as the
-            // newest answer of the switcher.
             withContext(NonCancellable) {
                 persistAssistantContent(assistantId)
                 snapshotVersion(assistantId)
             }
-            // Only settle the status if this generation is still the active one;
-            // a newer generation may already have taken over.
             _uiState.update { state ->
                 if (generationJob === job && state.status is ChatStatus.Generating) {
                     state.copy(status = ChatStatus.Idle)
@@ -698,7 +612,6 @@ class ChatRepository(
         }
     }
 
-    /** Best-effort: a failure or timeout leaves the answer without chips. */
     private suspend fun fetchFollowUps(llm: ChatLlmState.Ready, assistantId: String, question: String) {
         val suggester = followUpSuggestions ?: return
         val answer = _uiState.value.messages.firstOrNull { it.id == assistantId }?.content.orEmpty()
@@ -707,7 +620,7 @@ class ChatRepository(
             withTimeout(FollowUpSuggestions.TIMEOUT_MS) {
                 suggester(llm.provider, llm.model, question, answer)
             }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             return
         } catch (e: CancellationException) {
             throw e
@@ -725,8 +638,7 @@ class ChatRepository(
     }
 
     private suspend fun appendAssistantPlaceholderAndGenerate() {
-        val llm = currentLlm()
-        if (llm == null) {
+        val llm = currentLlm() ?: run {
             refuseWithoutLlm()
             return
         }
@@ -742,7 +654,7 @@ class ChatRepository(
         startGeneration(llm, assistantId)
     }
 
-    private suspend fun appendDelta(assistantId: String, text: String) {
+    private fun appendDelta(assistantId: String, text: String) {
         _uiState.update { state ->
             state.copy(
                 messages = state.messages.map { message ->
@@ -752,8 +664,7 @@ class ChatRepository(
         }
     }
 
-    /** Streams real model reasoning into the assistant message. */
-    private suspend fun appendReasoning(assistantId: String, text: String) {
+    private fun appendReasoning(assistantId: String, text: String) {
         _uiState.update { state ->
             state.copy(
                 messages = state.messages.map { message ->
@@ -763,11 +674,6 @@ class ChatRepository(
         }
     }
 
-    /**
-     * Throttled persistence: writing every delta would thrash the database, so
-     * streamed output lands at most once per [PERSIST_THROTTLE_MS] and always
-     * again at generation end.
-     */
     private suspend fun maybePersist(assistantId: String) {
         val timestamp = clock()
         if (timestamp - lastPersistAt >= PERSIST_THROTTLE_MS) {
@@ -776,7 +682,6 @@ class ChatRepository(
         }
     }
 
-    /** Writes the current streamed content of [assistantId] to the store. */
     private suspend fun persistAssistantContent(assistantId: String) {
         val s = store ?: return
         val state = _uiState.value
@@ -785,11 +690,6 @@ class ChatRepository(
         s.updateMessageContent(assistantId, message.content, message.reasoning, now())
     }
 
-    /**
-     * Records the current content of [messageId] as its newest answer version
-     * and selects it. A consecutive duplicate of the last version is not
-     * recorded twice.
-     */
     private suspend fun snapshotVersion(messageId: String) {
         val content = _uiState.value.messages
             .firstOrNull { it.id == messageId }
@@ -815,11 +715,7 @@ class ChatRepository(
         store?.updateSelectedVersion(messageId, selected)
     }
 
-
     private suspend fun failGeneration(assistantId: String, failure: ChatChunk.Failure) {
-        // An empty placeholder carries no information: drop it. Partial
-        // content is kept so the user sees what arrived. Both decisions are
-        // computed inside one state update.
         var kept = false
         _uiState.update { state ->
             val hasContent = state.messages.any { it.id == assistantId && it.content.isNotEmpty() }
@@ -840,12 +736,6 @@ class ChatRepository(
         failedAssistantId = if (kept) assistantId else null
     }
 
-    /**
-     * The request for one generation: every message before the assistant
-     * placeholder. Images and text-file contents of the most recent user
-     * message ride along; older attachments stay display-only to keep repeated
-     * turns bounded.
-     */
     private suspend fun requestFor(assistantId: String): Pair<List<Pair<Role, String>>, List<String>> =
         withContext(generationDispatcher) {
             val messages = _uiState.value.messages.takeWhile { it.id != assistantId }
@@ -882,7 +772,6 @@ class ChatRepository(
             mapped to images
         }
 
-    /** The data-URL of a stored image copy, or null when the file is missing. */
     private fun dataUrl(path: String): String? {
         val file = File(path)
         if (!file.exists()) return null
@@ -890,7 +779,6 @@ class ChatRepository(
         return "data:image/jpeg;base64,$encoded"
     }
 
-    /** The content of a stored text-file copy, or empty when it is missing. */
     private fun readTextFile(path: String): String =
         File(path).takeIf { it.exists() }?.readText().orEmpty()
 
@@ -944,10 +832,8 @@ class ChatRepository(
     private fun now(): Long = clock()
 
     companion object {
-        /** Minimum interval between streamed-content writes to the store. */
         const val PERSIST_THROTTLE_MS = 300L
 
-        /** The plain-text transcript format used for sharing a conversation. */
         fun buildShareText(title: String, messages: List<UiMessage>): String = buildString {
             append(title)
             messages.forEach { message ->
@@ -963,12 +849,8 @@ class ChatRepository(
             }
         }
 
-        /** Shown when search is toggled on without a configured service. */
         const val SEARCH_NOT_CONFIGURED = "Configure a search service in Settings first."
-
-        /** Per-message attachment limits, enforced on the staged list. */
         const val MAX_IMAGES_PER_MESSAGE = AttachmentIngester.MAX_IMAGES_PER_MESSAGE
         const val MAX_TEXTS_PER_MESSAGE = AttachmentIngester.MAX_TEXTS_PER_MESSAGE
-
     }
 }

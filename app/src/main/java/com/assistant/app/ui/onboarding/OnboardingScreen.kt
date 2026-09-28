@@ -1,5 +1,6 @@
 package com.assistant.app.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +43,7 @@ import kotlinx.coroutines.launch
 private const val PAGE_COUNT = 3
 
 /**
- * Nara Onboarding: Warm, minimal introduction to user-controlled AI conversation.
+ * Inlet Chat Onboarding: Minimal, spacious introduction to user-controlled AI conversation.
  */
 @Composable
 fun OnboardingScreen(
@@ -52,6 +53,10 @@ fun OnboardingScreen(
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
     val scope = rememberCoroutineScope()
     val isLast = pagerState.currentPage == PAGE_COUNT - 1
+
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    }
 
     Column(
         modifier = modifier
@@ -68,12 +73,12 @@ fun OnboardingScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_nara_logo),
+                    painter = painterResource(R.drawable.ic_inlet_logo),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(28.dp),
                 )
-                Spacer(Modifier.width(AppSpacing.xs))
+                Spacer(Modifier.width(AppSpacing.sm))
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

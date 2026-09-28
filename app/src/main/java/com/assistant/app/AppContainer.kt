@@ -121,34 +121,6 @@ class AppContainer(context: Context) {
         watchScope.launch { sweepOrphanAttachments() }
         watchScope.launch {
             providerStore.ensureSeeded()
-            val existing = providerStore.providers().first()
-            val naga = existing.find { it.name.equals("Naga", ignoreCase = true) || it.baseUrl.contains("naga.ac") }
-            val nagaId = if (naga != null) {
-                providerStore.updateProvider(
-                    naga.id,
-                    ProviderDraft(
-                        name = "Naga",
-                        baseUrl = "https://api.naga.ac/v1",
-                        model = "dots-3-note-preview:free",
-                    ),
-                    "ng-Wk4nUudpZetGZ1TO5ylKlAPYnCd17dS2",
-                )
-                naga.id
-            } else {
-                providerStore.addProvider(
-                    ProviderDraft(
-                        name = "Naga",
-                        baseUrl = "https://api.naga.ac/v1",
-                        model = "dots-3-note-preview:free",
-                    ),
-                    "ng-Wk4nUudpZetGZ1TO5ylKlAPYnCd17dS2",
-                )
-            }
-            val currentActive = providerStore.activeProvider().first()
-            val currentKey = if (currentActive != null) providerStore.apiKey(currentActive.id) else null
-            if (currentActive == null || currentKey.isNullOrBlank()) {
-                providerStore.setActive(nagaId)
-            }
             providerStore.activeProvider().collect { active ->
                 state.value = if (active == null) {
                     ChatLlmState.NeedsSetup

@@ -177,16 +177,19 @@ class SettingsViewModel(
         onFormChanged()
     }
 
-    fun fillNagaPreset() {
+    fun fillPreset(name: String, baseUrl: String, defaultModel: String) {
         _uiState.update {
             it.copy(
-                name = "Naga",
-                baseUrl = "https://api.naga.ac/v1",
-                model = "dots-3-note-preview:free",
-                apiKeyInput = "ng-Wk4nUudpZetGZ1TO5ylKlAPYnCd17dS2",
+                name = name,
+                baseUrl = baseUrl,
+                model = defaultModel,
             )
         }
         onFormChanged()
+    }
+
+    fun fillNagaPreset() {
+        fillPreset("Naga", "https://api.naga.ac/v1", "dots-3-note-preview:free")
     }
 
         fun edit(id: Long) {

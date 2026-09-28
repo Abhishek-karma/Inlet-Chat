@@ -626,36 +626,42 @@ private fun ProviderEditor(
             .padding(top = AppSpacing.xs),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
     ) {
-        Surface(
-            shape = AppShape.medium,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.md, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Testing Provider: Naga",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "dots-3-note-preview:free",
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = AppCodeFontFamily),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                TextButton(onClick = viewModel::fillNagaPreset) {
-                    Text("Apply Preset", style = MaterialTheme.typography.labelMedium)
+        if (state.editingId == null) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = AppSpacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_quick_presets),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 2.dp, bottom = AppSpacing.xs),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+                ) {
+                    listOf(
+                        Triple("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
+                        Triple("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini"),
+                        Triple("Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+                        Triple("Naga", "https://api.naga.ac/v1", "dots-3-note-preview:free"),
+                    ).forEach { (presetName, url, defaultModel) ->
+                        Surface(
+                            onClick = { viewModel.fillPreset(presetName, url, defaultModel) },
+                            shape = AppShape.pill,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        ) {
+                            Text(
+                                text = presetName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
+
         OutlinedTextField(
             value = state.name,
             onValueChange = viewModel::setName,
