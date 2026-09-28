@@ -4,6 +4,7 @@ import android.content.ClipData
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -15,10 +16,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,9 +33,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,15 +70,16 @@ import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
+import com.assistant.app.ui.theme.AppTypographyStyles
 import com.assistant.app.ui.theme.appTween
 import kotlinx.coroutines.delay
 
 private val USER_BUBBLE_SHAPE = AppShape.userBubble
 private val USER_BUBBLE_MAX_WIDTH = 340.dp
-private const val WAITING_DELAY_MILLIS = 400L
+private const val WAITING_DELAY_MILLIS = 350L
 
 /**
- * Nara Transcript: Content-first conversation stream with reading rhythm.
+ * Nara Message Transcript: Content-first conversation stream optimized for reading comfort.
  */
 @Composable
 fun MessageList(
@@ -100,6 +103,7 @@ fun MessageList(
         contentPadding = PaddingValues(horizontal = AppSpacing.lg, vertical = AppSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.xl),
     ) {
+
         items(messages.asReversed(), key = { it.id }) { message ->
             val isLast = message.id == messages.last().id
             MessageItem(
@@ -146,7 +150,7 @@ private fun MessageItem(
     }
     val enterModifier = Modifier.graphicsLayer {
         alpha = enter.value
-        translationY = (1f - enter.value) * 16f
+        translationY = (1f - enter.value) * 12f
     }
 
     Box(
@@ -156,7 +160,7 @@ private fun MessageItem(
         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         Box(
-            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+            modifier = Modifier.defaultMinSize(minHeight = AppDimens.minTouchTarget),
             contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
             val longPress = Modifier.pointerInput(actionsEnabled) {
@@ -206,7 +210,7 @@ private fun MessageItem(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         border = BorderStroke(
                             1.dp,
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         ),
                     ) {
                         Text(
@@ -215,12 +219,12 @@ private fun MessageItem(
                             },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier.padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
                         )
                     }
                 }
             } else {
-                // Editorial Assistant Message
+                // Assistant Message (No giant card container, prioritization of reading)
                 Column(horizontalAlignment = Alignment.Start) {
                     if (showReasoning && message.reasoning.isNotBlank()) {
                         ReasoningSection(
@@ -232,6 +236,7 @@ private fun MessageItem(
 
                     MessageText(
                         text = message.content,
+                        streaming = streaming,
                         modifier = longPress,
                     )
 
@@ -243,7 +248,7 @@ private fun MessageItem(
                         SearchCitationsList(sources = message.sources)
                     }
 
-                    // Bottom message action affordances & version switcher
+                    // Message action bar & version switcher
                     if (!streaming && message.content.isNotBlank()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -265,7 +270,7 @@ private fun MessageItem(
                                     val data = ClipData.newPlainText("message", message.content)
                                     clipboard.setClip(ClipEntry(data))
                                 },
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(36.dp),
                             ) {
                                 Icon(
                                     painter = painterResource(AppIcons.Copy),
@@ -278,7 +283,7 @@ private fun MessageItem(
                             if (canSpeak) {
                                 IconButton(
                                     onClick = { onSpeakMessage?.invoke(message.id) },
-                                    modifier = Modifier.size(32.dp),
+                                    modifier = Modifier.size(36.dp),
                                 ) {
                                     Icon(
                                         painter = painterResource(AppIcons.Speak),
@@ -292,7 +297,7 @@ private fun MessageItem(
                             if (canRegenerate) {
                                 IconButton(
                                     onClick = onRegenerate,
-                                    modifier = Modifier.size(32.dp),
+                                    modifier = Modifier.size(36.dp),
                                 ) {
                                     Icon(
                                         painter = painterResource(AppIcons.Renew),
@@ -358,7 +363,57 @@ private fun MessageItem(
     }
 }
 
-/** Subtle ambient waiting pulse while waiting for first token */
+/** Error message banner with retry action */
+@Composable
+private fun ErrorMessageBanner(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = AppShape.medium,
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+        ) {
+            Icon(
+                painter = painterResource(AppIcons.Error),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = AppSpacing.sm),
+            )
+            Button(
+                onClick = onRetry,
+                shape = AppShape.pill,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+                contentPadding = PaddingValues(horizontal = AppSpacing.md, vertical = 0.dp),
+                modifier = Modifier.height(36.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.error_retry),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
+/** Ambient pulsing indicator while waiting for response tokens */
 @Composable
 private fun WaitingIndicator(modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(false) }
@@ -400,7 +455,7 @@ private fun WaitingIndicator(modifier: Modifier = Modifier) {
     }
 }
 
-/** Reasoning section with calm disclosure styling */
+/** Reasoning section with calm disclosure and sidebar thinking bar */
 @Composable
 private fun ReasoningSection(
     reasoning: String,
@@ -410,43 +465,61 @@ private fun ReasoningSection(
     var expanded by remember { mutableStateOf(false) }
     val visible = expanded || autoExpanded
 
+    val rotation by animateFloatAsState(
+        targetValue = if (visible) 90f else 0f,
+        animationSpec = appTween(AppMotion.FAST),
+        label = "chevronRotation",
+    )
+
     Surface(
         shape = AppShape.small,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(AppSpacing.sm)) {
-            Row(
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            // Elegant vertical primary bar indicating ongoing thought / reasoning
+            Box(
                 modifier = Modifier
-                    .clip(AppShape.small)
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = AppSpacing.xs, vertical = AppSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    painter = painterResource(if (visible) AppIcons.ChevronDown else AppIcons.ChevronRight),
-                    contentDescription = stringResource(R.string.cd_toggle_reasoning),
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(R.string.reasoning_header),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = AppSpacing.xs),
-                )
-            }
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+            )
 
-            AnimatedVisibility(visible = visible) {
-                Text(
-                    text = reasoning,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = AppCodeFontFamily),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(modifier = Modifier.padding(AppSpacing.xs)) {
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
-                )
+                        .clip(AppShape.small)
+                        .clickable { expanded = !expanded }
+                        .padding(horizontal = AppSpacing.xs, vertical = AppSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(AppIcons.ChevronRight),
+                        contentDescription = stringResource(R.string.cd_toggle_reasoning),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer { rotationZ = rotation },
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.reasoning_header),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = AppSpacing.xs),
+                    )
+                }
+
+                AnimatedVisibility(visible = visible) {
+                    Text(
+                        text = reasoning,
+                        style = AppTypographyStyles.reasoning,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
+                    )
+                }
             }
         }
     }
@@ -461,7 +534,7 @@ private fun SearchCitationsList(sources: List<SearchResult>) {
                 onClick = { runCatching { uriHandler.openUri(source.url) } },
                 shape = AppShape.small,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                 modifier = Modifier
                     .padding(vertical = 2.dp)
                     .fillMaxWidth(),
@@ -503,7 +576,7 @@ private fun VersionSwitcher(
     Surface(
         shape = AppShape.pill,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -512,7 +585,7 @@ private fun VersionSwitcher(
             IconButton(
                 onClick = onPrevious,
                 enabled = enabled && selected > 0,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(28.dp),
             ) {
                 Icon(
                     painter = painterResource(AppIcons.ChevronLeft),
@@ -529,7 +602,7 @@ private fun VersionSwitcher(
             IconButton(
                 onClick = onNext,
                 enabled = enabled && selected < count - 1,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(28.dp),
             ) {
                 Icon(
                     painter = painterResource(AppIcons.ChevronRight),
