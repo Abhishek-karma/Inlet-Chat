@@ -1,0 +1,3 @@
+# Keep shell/batch launchers executable across platforms.
+gradlew text eol=lf
+*.bat text eol=crlf

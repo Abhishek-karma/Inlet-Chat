@@ -1,0 +1,23 @@
+# Build
+.gradle/
+build/
+**/build/
+.build-outputs/
+
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# Local
+local.properties
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tools
+.superpowers/
+stitch_application_interface_builder/

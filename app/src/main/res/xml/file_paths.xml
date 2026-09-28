@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera captures staged as attachment images. -->
+    <cache-path name="camera" path="camera/" />
+    <!-- Stored attachment copies. -->
+    <files-path name="attachments" path="attachments/" />
+</paths>

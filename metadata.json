@@ -1,0 +1,6 @@
+{
+  "name": "Inlet Chat",
+  "description": "Inlet Chat — Radiant, fast, production-quality AI chat application with streaming responses, conversation history, and voice.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

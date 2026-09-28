@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Inlet Chat</string>
+
+    <!-- Home greeting and empty state. -->
+    <string name="greeting_morning">Good morning</string>
+    <string name="greeting_afternoon">Good afternoon</string>
+    <string name="greeting_evening">Good evening</string>
+    <string name="chat_empty_statement">What can I help with?</string>
+    <string name="chat_prompt_1">Explain how HTTPS works</string>
+    <string name="chat_prompt_2">Help me draft an email</string>
+    <string name="chat_prompt_3">Brainstorm weekend plans</string>
+
+    <!-- Shown instead of the conversation while no provider is configured. -->
+    <string name="chat_setup_required">Set up a provider in Settings to start chatting.</string>
+    <string name="chat_open_settings">Open Settings</string>
+
+    <!-- Composer -->
+    <string name="composer_hint">Ask anything…</string>
+    <string name="composer_web_search">Web search</string>
+    <string name="composer_listening">Listening…</string>
+    <string name="cd_selected">Selected</string>
+    <string name="cd_send">Send</string>
+    <string name="cd_stop">Stop</string>
+    <string name="cd_use_microphone">Use microphone</string>
+    <!-- Attachment actions and staged chips. -->
+    <string name="cd_attach_files">Attach files</string>
+    <string name="attach_photos">Photo library</string>
+    <string name="cd_attach_photos">Attach photos from the library</string>
+    <string name="attach_camera">Take photo</string>
+    <string name="cd_attach_camera">Take a photo to attach</string>
+    <string name="attach_file">Attach file</string>
+    <string name="cd_attach_file">Attach a text file</string>
+    <string name="cd_remove_attachment">Remove attachment</string>
+    <string name="attach_photos_subtitle">Choose from gallery</string>
+    <string name="attach_camera_subtitle">Take a photo</string>
+    <string name="attach_file_subtitle">Select a file</string>
+    <string name="message_attachment_only">Sent an attachment</string>
+    <!-- Scroll-to-latest affordance while a response streams. -->
+    <string name="cd_scroll_to_latest">Scroll to latest</string>
+
+    <!-- Conversation actions and banners -->
+    <string name="error_retry">Retry</string>
+    <string name="error_title">Something went wrong</string>
+    <string name="edit_banner_label">Editing message</string>
+    <string name="menu_copy">Copy</string>
+    <string name="menu_regenerate">Regenerate</string>
+    <string name="menu_edit_and_resend">Edit and resend</string>
+    <!-- Full-screen viewer for attached images. -->
+    <string name="menu_save">Save</string>
+    <string name="viewer_saved">Saved</string>
+    <string name="viewer_save_failed">Couldn’t save</string>
+    <string name="viewer_load_failed">Couldn’t load image</string>
+    <string name="cd_close_viewer">Close viewer</string>
+    <!-- Answer version switcher on regenerated responses. -->
+    <string name="cd_previous_answer">Previous answer</string>
+    <string name="cd_next_answer">Next answer</string>
+    <string name="cd_dismiss">Dismiss</string>
+    <string name="cd_cancel_edit">Cancel editing</string>
+
+    <string name="history_title">History</string>
+    <string name="history_empty">No conversations yet</string>
+    <string name="history_empty_hint">Start a chat and it will appear here.</string>
+    <string name="history_pinned">Pinned</string>
+    <string name="menu_pin">Pin</string>
+    <string name="menu_unpin">Unpin</string>
+    <string name="menu_rename">Rename</string>
+    <string name="menu_share">Share</string>
+    <string name="menu_delete">Delete</string>
+    <string name="cd_delete_conversation">Delete conversation</string>
+    <!-- History date groups. -->
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_previous_7_days">Previous 7 days</string>
+    <string name="history_older">Older</string>
+    <!-- Settings about section. -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="cd_share_conversation">Share conversation</string>
+    <string name="history_rename_title">Rename conversation</string>
+    <string name="history_rename_field">Name</string>
+    <string name="history_rename_save">Save</string>
+    <string name="history_delete_title">Delete conversation?</string>
+    <string name="history_delete_message">“%1$s” will be removed from your history.</string>
+    <string name="history_delete_confirm">Delete</string>
+    <string name="history_delete_cancel">Cancel</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_provider">Provider</string>
+    <string name="settings_section_voice">Voice</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <!-- Shown before any provider has been added. -->
+    <string name="settings_provider_none">No provider yet. Add one to start chatting.</string>
+    <string name="settings_add_provider">Add provider</string>
+    <string name="settings_active">Active</string>
+    <string name="settings_delete">Delete</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="cd_set_active">Set as active provider</string>
+    <!-- Provider switcher in the chat top bar. -->
+    <string name="cd_switch_provider">Switch provider</string>
+    <string name="settings_field_name">Name</string>
+    <string name="settings_field_base_url">Base URL</string>
+    <string name="settings_field_api_key">API key</string>
+    <string name="settings_field_model">Model</string>
+    <!-- Placeholder shown in the API key field while a saved key exists. -->
+    <string name="settings_api_key_saved_placeholder">••••••••</string>
+    <string name="settings_show_key">Show</string>
+    <string name="settings_hide_key">Hide</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_saving">Saving…</string>
+    <string name="settings_test_connection">Test connection</string>
+    <string name="settings_testing_connection">Testing…</string>
+    <string name="settings_connection_success">Connection works</string>
+    <string name="settings_voice_output">Voice output</string>
+    <string name="settings_voice_unavailable">Voice output is not available on this device.</string>
+    <string name="settings_voice_auto_play">Auto-play responses</string>
+    <string name="settings_voice_speed">Voice speed</string>
+<string name="settings_voice_choice">Voice</string>
+<string name="settings_voice_default">Default</string>
+<string name="settings_voice_natural">Natural</string>
+<string name="settings_voice_loading">Loading voices…</string>
+<string name="settings_voice_none">No voices installed. Install Google Speech Services to pick a voice.</string>
+    <string name="settings_speed_slow">Slow</string>
+    <string name="settings_speed_normal">Normal</string>
+    <string name="settings_speed_fast">Fast</string>
+    <string name="voice_speaking_hint">Speaking — tap the mic to stop.</string>
+    <string name="menu_speak">Speak</string>
+    <!-- Web search. -->
+    <string name="settings_section_search">Web search</string>
+    <string name="settings_search_description">Optional. Answers can use web results when the Web toggle is on. Add a Brave Search API key to enable it.</string>
+    
+    <string name="settings_search_api_key">Search API key</string>
+    <!-- Reasoning display. -->
+    <string name="settings_section_reasoning">Reasoning</string>
+    <string name="settings_reasoning_visible">Show reasoning</string>
+    <string name="settings_reasoning_description">Shows the model\u2019s real reasoning above its answer when the provider sends it.</string>
+    <string name="reasoning_header">Reasoning</string>
+    <string name="cd_toggle_reasoning">Show or hide reasoning</string>
+
+    <!-- Voice input hints (inline, above the composer). -->
+    <string name="voice_no_match_hint">Didn\u2019t catch that — try again.</string>
+    <string name="voice_mic_rationale">Microphone permission is needed for voice input. You can keep typing instead.</string>
+    <string name="settings_appearance_system">System</string>
+    <string name="settings_appearance_light">Light</string>
+    <string name="settings_appearance_dark">Dark</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="settings_text_size_small">Small</string>
+    <string name="settings_text_size_normal">Normal</string>
+    <string name="settings_text_size_large">Large</string>
+
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_title_1">Chat with any AI model</string>
+    <string name="onboarding_body_1">Bring your own API keys and use the models you choose.</string>
+    <string name="onboarding_title_2">Your data, your control</string>
+    <string name="onboarding_body_2">Conversations are stored on this device. You configure the provider and its key; there is no account requirement.</string>
+    <string name="onboarding_title_3">What you can do</string>
+    <string name="onboarding_body_3"></string>
+    <string name="onboarding_cap_chat">Text chat with streaming answers</string>
+    <string name="onboarding_cap_voice">Voice input and spoken responses</string>
+    <string name="onboarding_cap_images">Attach images from camera or gallery</string>
+    <string name="onboarding_cap_files">Attach text files</string>
+
+
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search chats…</string>
+    <string name="search_recent">Recent</string>
+    <string name="search_results">Results</string>
+    <string name="search_empty">No conversations match.</string>
+
+    <string name="drawer_new_chat">New chat</string>
+    <string name="drawer_history">History</string>
+    <string name="drawer_search">Search chats</string>
+    <string name="drawer_settings">Settings</string>
+    <string name="cd_open_drawer">Open navigation menu</string>
+    <string name="cd_toggle_speaker">Toggle voice output</string>
+
+    <string name="model_selector_title">Select model</string>
+    <string name="model_selector_search">Search models…</string>
+    <string name="model_selector_unavailable">Could not load models from this provider. You can still type a model name.</string>
+    <string name="model_selector_retry">Try again</string>
+    <string name="model_selector_no_match">No matching model</string>
+
+
+    <!-- Top bar action content descriptions -->
+    <string name="cd_new_chat">New chat</string>
+    <string name="cd_back">Back</string>
+
+    <string name="settings_not_configured">Not set</string>
+    <string name="settings_configured">Configured</string>
+    <string name="settings_not_available">Unavailable</string>
+</resources>
