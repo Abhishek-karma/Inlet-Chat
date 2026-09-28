@@ -73,6 +73,20 @@ class AttachmentIngester(
         }
     }
 
+    /**
+     * Deletes attachment copies that are no longer referenced in the database.
+     */
+    suspend fun sweepOrphans(referencedPaths: suspend () -> Set<String>) = withContext(ioDispatcher) {
+        runCatching {
+            val referenced = referencedPaths()
+            attachmentsDir.listFiles()?.forEach { file ->
+                if (file.absolutePath !in referenced) {
+                    runCatching { file.delete() }
+                }
+            }
+        }
+    }
+
     internal fun storeImage(stream: InputStream, displayName: String): IngestResult {
         // Bounded read: this is the only full copy in memory, and decoding is
         // sampled from it (bounds need a separate decode pass).
