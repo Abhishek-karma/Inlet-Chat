@@ -35,7 +35,7 @@ import kotlinx.coroutines.withTimeout
 
 sealed interface ConnectionOutcome {
     data object Success : ConnectionOutcome
-    data class Failure(val message: String) : ConnectionOutcome
+    data class Failure(val message: String, val detail: String? = null) : ConnectionOutcome
 }
 
 data class ProviderSummary(
@@ -392,7 +392,7 @@ class SettingsViewModel(
                 it.copy(
                     isTesting = false,
                     connectionOutcome = failure
-                        ?.let { f -> ConnectionOutcome.Failure(f.error.userMessage) }
+                        ?.let { f -> ConnectionOutcome.Failure(f.error.userMessage, f.detail) }
                         ?: ConnectionOutcome.Success,
                 )
             }

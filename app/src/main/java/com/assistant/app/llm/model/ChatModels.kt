@@ -77,7 +77,7 @@ sealed interface ChatChunk {
 }
 
 enum class ProviderError(val userMessage: String) {
-    InvalidCredentials("Invalid API key"),
+    InvalidCredentials("API key was rejected. Check the key and try again."),
     RateLimited("Rate limit reached. Try again shortly."),
     NetworkUnavailable("Unable to connect. Check your network."),
     Timeout("Request timed out."),

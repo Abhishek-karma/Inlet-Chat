@@ -38,6 +38,8 @@ data class ChatUiState(
     val searchEnabled: Boolean = false,
     /** One-shot web-search notice above the composer. */
     val searchNotice: String? = null,
+    /** Whether attachments are currently being processed or ingested. */
+    val isIngestingAttachments: Boolean = false,
 )
 
 /**

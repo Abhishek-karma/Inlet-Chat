@@ -818,12 +818,27 @@ private fun ProviderEditor(
                 is ConnectionOutcome.Success -> stringResource(R.string.settings_connection_success)
                 is ConnectionOutcome.Failure -> outcome.message
             }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                color = color,
-                modifier = Modifier.padding(top = AppSpacing.xs),
-            )
+            Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = color,
+                )
+                if (outcome is ConnectionOutcome.Failure && outcome.detail != null) {
+                    Text(
+                        text = outcome.detail,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = AppCodeFontFamily),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f),
+                                shape = AppShape.small
+                            )
+                            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+                    )
+                }
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

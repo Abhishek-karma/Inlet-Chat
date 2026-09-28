@@ -146,7 +146,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(ChatStatus.Error("Invalid API key"), state.status)
+        assertEquals(ChatStatus.Error(ProviderError.InvalidCredentials.userMessage), state.status)
         assertEquals(1, state.messages.size)
         assertEquals(Role.USER, state.messages[0].role)
         assertEquals("Hi", state.messages[0].content)
@@ -158,7 +158,7 @@ class ChatViewModelTest {
     ) { viewModel, provider, _ ->
         viewModel.send("Hi")
         advanceUntilIdle()
-        assertEquals(ChatStatus.Error("Invalid API key"), viewModel.uiState.value.status)
+        assertEquals(ChatStatus.Error(ProviderError.InvalidCredentials.userMessage), viewModel.uiState.value.status)
 
         provider.script = listOf(ScriptedEvent.Delay(50), ScriptedEvent.Emit("Hello"), ScriptedEvent.Delay(50))
         viewModel.retry()
@@ -503,7 +503,7 @@ class ChatViewModelTest {
     ) { viewModel, provider, _ ->
         viewModel.send("Hi")
         advanceUntilIdle()
-        assertEquals(ChatStatus.Error("Invalid API key"), viewModel.uiState.value.status)
+        assertEquals(ChatStatus.Error(ProviderError.InvalidCredentials.userMessage), viewModel.uiState.value.status)
 
         viewModel.dismissError()
 

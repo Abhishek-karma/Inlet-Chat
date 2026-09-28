@@ -138,6 +138,7 @@ class ChatViewModel(
     fun addImageAttachments(uris: List<Uri>) {
         val ingester = attachmentIngester ?: return
         viewModelScope.launch {
+            repository.setIngestingAttachments(true)
             val results = uris.map { ingester.ingestImage(it) }
             applyIngestResults(results)
         }
@@ -146,6 +147,7 @@ class ChatViewModel(
     fun addTextAttachment(uri: Uri) {
         val ingester = attachmentIngester ?: return
         viewModelScope.launch {
+            repository.setIngestingAttachments(true)
             applyIngestResults(listOf(ingester.ingestText(uri)))
         }
     }

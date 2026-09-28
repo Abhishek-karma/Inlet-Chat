@@ -96,11 +96,18 @@ class ChatRepository(
     }
 
     fun addPendingAttachments(attachments: List<UiAttachment>) {
-        if (attachments.isEmpty()) return
         _uiState.update { state ->
             val (updated, error) = attachmentManager.addPendingAttachments(state.pendingAttachments, attachments)
-            state.copy(pendingAttachments = updated, attachmentError = error)
+            state.copy(
+                pendingAttachments = updated,
+                attachmentError = error,
+                isIngestingAttachments = false
+            )
         }
+    }
+
+    fun setIngestingAttachments(ingesting: Boolean) {
+        _uiState.update { it.copy(isIngestingAttachments = ingesting) }
     }
 
     fun removePendingAttachment(id: String) {
@@ -115,7 +122,7 @@ class ChatRepository(
     }
 
     fun setAttachmentError(message: String) {
-        _uiState.update { it.copy(attachmentError = message) }
+        _uiState.update { it.copy(attachmentError = message, isIngestingAttachments = false) }
     }
 
     private fun clearPendingAttachments() {
@@ -154,11 +161,11 @@ class ChatRepository(
     }
 
     private suspend fun runWebSearch(query: String): List<SearchResult> {
-        val result = searchController.executeSearch(query)
-        if (result.noticeMessage != null) {
+        val result = runCatching { searchController.executeSearch(query) }.getOrNull()
+        if (result != null && result.noticeMessage != null) {
             setSearchNotice(result.noticeMessage)
         }
-        return result.results
+        return result?.results ?: emptyList()
     }
 
     fun stop() {
