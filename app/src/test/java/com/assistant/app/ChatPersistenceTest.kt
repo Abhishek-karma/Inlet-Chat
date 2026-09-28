@@ -2,6 +2,7 @@ package com.assistant.app
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.assistant.app.data.AttachmentIngester
 import com.assistant.app.data.ChatLlmState
 import com.assistant.app.data.ChatRepository
 import com.assistant.app.data.ChatStatus
@@ -34,6 +35,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 import java.util.concurrent.Executor
 
 /**
@@ -66,7 +68,7 @@ class ChatPersistenceTest {
      */
     private fun runChatTest(
         script: List<ScriptedEvent>,
-        attachmentsDir: java.io.File? = null,
+        attachmentsDir: File? = null,
         block: suspend TestScope.(ChatViewModel, FakeLlmProvider, ChatRepository, ConversationStore) -> Unit,
     ): TestResult {
         val db = Room
@@ -92,8 +94,6 @@ class ChatPersistenceTest {
                 block(ChatViewModel(repository, chatLlm), provider, repository, store)
             }
         } finally {
-            // Closed only after runTest has fully settled (including its
-            // end-of-test scheduler drain), so no late write hits a closed DB.
             db.close()
         }
     }
@@ -106,7 +106,6 @@ class ChatPersistenceTest {
         ScriptedEvent.Delay(100),
     )
 
-    /** A string standing in for a provider credential that must never be persisted. */
     private val secretMarker = "sk-secret-test-key-marker"
 
     @Test
@@ -235,7 +234,6 @@ class ChatPersistenceTest {
             store = store,
             clock = { testScheduler.currentTime },
         )
-        // A leftover draft belongs to no conversation; opening one clears it.
         restoredRepository.setDraft("leftover draft")
         val restoredViewModel = ChatViewModel(restoredRepository, chatLlm)
         restoredViewModel.openConversation(conversationId)
@@ -252,7 +250,6 @@ class ChatPersistenceTest {
     fun openConversationDuringGenerationStopsAndResets() = runChatTest(
         script = listOf(ScriptedEvent.Delay(100), ScriptedEvent.Emit("Hel"), ScriptedEvent.Delay(100_000)),
     ) { viewModel, provider, repository, store ->
-        // A previously saved conversation to switch to.
         store.createConversation("saved", "Saved conversation", now = 1)
         store.appendMessage(
             com.assistant.app.data.local.MessageEntity("sm1", "saved", "USER", "saved question", 1),
@@ -273,12 +270,10 @@ class ChatPersistenceTest {
         assertEquals("", state.draft)
         assertEquals(listOf(Role.USER to "saved question"), state.messages.map { it.role to it.content })
 
-        // The interrupted conversation kept its partial content.
         val interruptedId = repository.conversations.first().first { it.id != "saved" }.id
         val interrupted = store.messages(interruptedId).first()
         assertEquals("Hel", interrupted.last { it.role == "ASSISTANT" }.content)
 
-        // The restored conversation can generate again.
         provider.script = listOf(ScriptedEvent.Emit("Saved answer"))
         viewModel.send("Saved question")
         advanceUntilIdle()
@@ -326,13 +321,9 @@ class ChatPersistenceTest {
                 listOf("USER", "ASSISTANT"),
                 store.messages(newId).first().map { it.role },
             )
-            // No orphan rows remain under the deleted conversation.
             assertTrue(store.messages(deletedId).first().isEmpty())
         }
 
-
-    //    stored — the credential handed to the provider (marker here) never
-    //    reaches a message or title row.
     @Test
     fun persistedMessagesNeverContainSecretMaterial() = runChatTest(helloScript) { viewModel, _, _, store ->
         viewModel.send("Hi")
@@ -375,14 +366,12 @@ class ChatPersistenceTest {
         assertEquals(listOf("Hello", "Hello again"), restored.versions)
         assertEquals(1, restored.selectedVersion)
 
-        // Switching the restored version writes through to the store.
         restoredViewModel.switchVersion(assistantId, 0)
         advanceUntilIdle()
         val persisted = store.messages(conversationId).first().last { it.role == "ASSISTANT" }
         assertEquals("Hello", persisted.content)
         assertEquals(0, persisted.selectedVersion)
     }
-
 
     @Test
     fun editAndResendRemovesVersionRowsOfDroppedMessages() = runChatTest(
@@ -401,8 +390,6 @@ class ChatPersistenceTest {
         viewModel.editAndResend(firstUserId, "Edited")
         advanceUntilIdle()
 
-        // The dropped answer's two version rows are gone; the fresh answer
-        // starts its own version history.
         assertEquals(1, store.messageVersions(conversationId).first().size)
         val persisted = store.messages(conversationId).first().last { it.role == "ASSISTANT" }
         assertEquals("Edited reply", persisted.content)
@@ -418,8 +405,8 @@ class ChatPersistenceTest {
             script = listOf(ScriptedEvent.Emit("Hello")),
             attachmentsDir = dir,
         ) { viewModel, provider, repository, store ->
-            val image = java.io.File(dir, "img.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-            val text = java.io.File(dir, "notes.txt").apply { writeText("file body") }
+            val image = File(dir, "img.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val text = File(dir, "notes.txt").apply { writeText("file body") }
             repository.addPendingAttachments(
                 listOf(
                     com.assistant.app.llm.model.UiAttachment(
@@ -445,7 +432,6 @@ class ChatPersistenceTest {
             advanceUntilIdle()
             val conversationId = viewModel.uiState.value.conversationId!!
 
-            // The request carried the image data-URL and the inlined text file.
             val request = provider.requests.single()
             assertEquals(1, request.images.size)
             assertTrue(request.messages.last().second.contains("What is this?"))
@@ -453,7 +439,6 @@ class ChatPersistenceTest {
             assertTrue(request.messages.last().second.contains("file body"))
             assertTrue(viewModel.uiState.value.pendingAttachments.isEmpty())
 
-            // Rows persisted; a fresh repository restores them (process death).
             assertEquals(2, store.attachments(conversationId).first().size)
             val restoredChatLlm = MutableStateFlow(ChatLlmState.Ready(provider, SECRET_MARKER_MODEL))
             val restoredRepository = ChatRepository(
@@ -468,7 +453,6 @@ class ChatPersistenceTest {
             advanceUntilIdle()
             assertEquals(2, restoredViewModel.uiState.value.messages[0].attachments.size)
 
-            // Deleting the conversation removes the rows and the stored copies.
             assertTrue(image.exists())
             viewModel.deleteConversation(conversationId)
             advanceUntilIdle()
@@ -476,6 +460,24 @@ class ChatPersistenceTest {
             assertFalse(image.exists())
             assertFalse(text.exists())
         }
+    }
+
+    @Test
+    fun orphanAttachmentsSweptWhenUnreferencedInDatabase() = runTest {
+        val ingester = AttachmentIngester(ApplicationProvider.getApplicationContext())
+        ingester.attachmentsDir.mkdirs()
+        val orphanFile = File(ingester.attachmentsDir, "orphan.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val validFile = File(ingester.attachmentsDir, "valid.jpg").apply { writeBytes(byteArrayOf(4, 5, 6)) }
+
+        assertTrue(orphanFile.exists())
+        assertTrue(validFile.exists())
+
+        ingester.sweepOrphans { setOf(validFile.absolutePath) }
+
+        assertFalse(orphanFile.exists())
+        assertTrue(validFile.exists())
+
+        validFile.delete()
     }
 
     @Test
@@ -540,8 +542,6 @@ class ChatPersistenceTest {
         val conversationId = viewModel.uiState.value.conversationId!!
         val assistantId = viewModel.uiState.value.messages[1].id
 
-        // Simulate a mid-stream process death: content was persisted but no
-        // version row exists for it.
         store.updateMessageContent(assistantId, "partial answer", reasoning = "", updatedAt = 5)
         provider.script = listOf(ScriptedEvent.Emit("Fresh"))
 
@@ -555,7 +555,6 @@ class ChatPersistenceTest {
         advanceUntilIdle()
         assertEquals("Hello", restoredViewModel.uiState.value.messages[1].content)
 
-        // The unversioned content survived as its own version.
         val versions = restoredViewModel.uiState.value.messages[1].versions
         assertEquals(listOf("Hello", "partial answer"), versions)
         restoredViewModel.switchVersion(assistantId, 1)
