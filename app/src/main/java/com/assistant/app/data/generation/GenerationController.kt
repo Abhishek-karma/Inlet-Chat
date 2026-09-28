@@ -14,6 +14,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /**
@@ -118,10 +119,12 @@ class GenerationController(
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
-                onPersist()
-                onCancelled()
+                withTimeoutOrNull(CANCEL_FLUSH_TIMEOUT_MS) {
+                    onPersist()
+                    onCancelled()
+                }
+                clearSession(session.generationId)
             }
-            clearSession(session.generationId)
             throw e
         } catch (e: Exception) {
             failure = ChatChunk.Failure(ProviderError.Unknown, e.message)
@@ -163,5 +166,6 @@ class GenerationController(
 
     companion object {
         const val PERSIST_THROTTLE_MS = 300L
+        const val CANCEL_FLUSH_TIMEOUT_MS = 1_000L
     }
 }

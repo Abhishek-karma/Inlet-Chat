@@ -36,7 +36,9 @@ import kotlin.math.ceil
 
 /** Mermaid renderer over the bundled engine, hardened as far as it can be. */
 
-private const val ASSET_SCHEME = "file:///android_asset"
+private const val ASSET_URL_PREFIX = "file:///android_asset"
+
+private const val FILE_SCHEME = "file"
 
 private const val REPORT_JS =
     "function report(){var c=document.getElementById('c');if(c&&window.Android){" +
@@ -127,11 +129,11 @@ private fun RichBlockWebView(html: String, modifier: Modifier = Modifier) {
                         override fun shouldOverrideUrlLoading(
                             view: WebView,
                             request: WebResourceRequest,
-                        ): Boolean = !request.url.scheme.equals(ASSET_SCHEME, ignoreCase = true)
+                        ): Boolean = !request.url.scheme.equals(FILE_SCHEME, ignoreCase = true)
 
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
-                            !url.startsWith(ASSET_SCHEME, ignoreCase = true)
+                            !url.startsWith(ASSET_URL_PREFIX, ignoreCase = true)
                     }
                     setDownloadListener { _, _, _, _, _ -> Unit }
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW

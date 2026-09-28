@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.assistant.app.data.ChatLlmState
 import com.assistant.app.data.ChatRepository
 import com.assistant.app.data.ChatStatus
+import com.assistant.app.data.generation.GenerationController
 import com.assistant.app.llm.FakeLlmProvider
 import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.ScriptedEvent
@@ -136,6 +137,26 @@ class ChatViewModelTest {
 
         assertEquals(ChatStatus.Idle, viewModel.uiState.value.status)
         assertEquals("Hel", viewModel.uiState.value.messages[1].content)
+    }
+
+    @Test
+    fun aStalledPostCancellationFlushDoesNotHangCancellationForever() = runChatTest(
+        script = listOf(ScriptedEvent.Delay(100), ScriptedEvent.Emit("Hel"), ScriptedEvent.Delay(100_000)),
+    ) { viewModel, _, _ ->
+        viewModel.send("Hi")
+        advanceTimeBy(100)
+        runCurrent()
+        assertEquals(ChatStatus.Generating, viewModel.uiState.value.status)
+
+        viewModel.stop()
+
+        // The flush is bounded, so the scheduler must reach idle on its own
+        // even though the stream would otherwise keep delaying forever.
+        advanceTimeBy(GenerationController.CANCEL_FLUSH_TIMEOUT_MS * 3)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(ChatStatus.Idle, viewModel.uiState.value.status)
     }
 
     @Test

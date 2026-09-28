@@ -50,9 +50,9 @@ class ProviderStore(
      * only while the table is empty, the key is copied right after, and the
      * legacy fields are cleared last.
      */
-    suspend fun ensureSeeded() {
+    suspend fun ensureSeeded() = withContext(ioDispatcher) {
         val legacy = appPreferences.legacyProviderConfig()
-        if (legacy == null && keyStore.legacyApiKey() == null) return
+        if (legacy == null && keyStore.legacyApiKey() == null) return@withContext
         val dao = db.providerDao()
         if (legacy != null && dao.count() == 0) {
             val id = dao.insert(

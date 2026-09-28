@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -630,6 +631,22 @@ class MessageTextTest {
         assertEquals(1, blocks.size)
         assertTrue(blocks[0] is MessageBlock.Diagram)
         assertEquals("graph TD\n  A --> B", (blocks[0] as MessageBlock.Diagram).code)
+    }
+
+    @Test
+    fun diagramDocumentLoadsTheBundledRendererAndEscapesModelOutput() {
+        val document = diagramDocument("graph TD\n  A[\"<img src=x onerror=alert(1)>\"] --> B")
+
+        assertTrue(document.contains("file:///android_asset/diagram/mermaid.min.js"))
+        assertTrue(document.contains("mermaid.initialize("))
+        assertFalse(document.contains("<img src=x"))
+        assertTrue(document.contains("&lt;img src=x onerror=alert(1)&gt;"))
+    }
+
+    @Test
+    fun diagramDocumentDisablesHtmlLabelsForTheFullScreenViewer() {
+        assertTrue(diagramDocument("graph TD\n A --> B", htmlLabels = true).contains("htmlLabels:false").not())
+        assertTrue(diagramDocument("graph TD\n A --> B", htmlLabels = false).contains("htmlLabels:false"))
     }
 
     @Test

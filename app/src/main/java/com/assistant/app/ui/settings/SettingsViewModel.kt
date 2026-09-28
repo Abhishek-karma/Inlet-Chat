@@ -108,6 +108,7 @@ class SettingsViewModel(
     private val ttsAvailable: Boolean = true,
     private val voiceOutput: VoiceOutput? = null,
     private val connectionTestDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(ttsAvailable = ttsAvailable))
@@ -126,7 +127,7 @@ class SettingsViewModel(
             val textSize = appPreferences.textSize.first()
             val reasoningVisible = appPreferences.reasoningVisible.first()
             val storedSearchEndpoint = appPreferences.searchEndpoint.first()
-            val storedSearchKey = secureKeyStore.searchApiKey()
+            val storedSearchKey = withContext(ioDispatcher) { secureKeyStore.searchApiKey() }
             _uiState.update {
                 it.copy(
                     voiceOutputEnabled = voiceOutputEnabled,
@@ -570,10 +571,10 @@ class SettingsViewModel(
                     appPreferences.setSearchEndpoint(enteredEndpoint)
                 }
                 if (enteredKey.isNotEmpty()) {
-                    secureKeyStore.setSearchApiKey(enteredKey)
+                    withContext(ioDispatcher) { secureKeyStore.setSearchApiKey(enteredKey) }
                 } else if (state.searchApiKeyInput.isNotEmpty()) {
                     // Cleared
-                    secureKeyStore.setSearchApiKey(null)
+                    withContext(ioDispatcher) { secureKeyStore.setSearchApiKey(null) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -583,7 +584,7 @@ class SettingsViewModel(
             }
 
             val currentEndpoint = appPreferences.searchEndpoint.first()
-            val currentKey = secureKeyStore.searchApiKey()
+            val currentKey = withContext(ioDispatcher) { secureKeyStore.searchApiKey() }
             _uiState.update {
                 it.copy(
                     isSearchSaving = false,
