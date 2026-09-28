@@ -6,17 +6,25 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -31,11 +39,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
 import com.assistant.app.ui.components.AppIcons
+import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 import kotlinx.coroutines.launch
@@ -44,6 +55,7 @@ private const val PAGE_COUNT = 3
 
 /**
  * Inlet Chat Onboarding: Minimal, spacious introduction to user-controlled AI conversation.
+ * Handles display cutouts, system bar insets, font scaling, and wide screens cleanly.
  */
 @Composable
 fun OnboardingScreen(
@@ -58,105 +70,122 @@ fun OnboardingScreen(
         scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(AppSpacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding()
+            .displayCutoutPadding(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = AppSpacing.sm),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxSize()
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .widthIn(max = AppDimens.maxContentWidth)
+                .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_inlet_logo),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp),
-                )
-                Spacer(Modifier.width(AppSpacing.sm))
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            TextButton(onClick = onDone) {
-                Text(
-                    text = stringResource(R.string.onboarding_skip),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) { page ->
-            OnboardingPage(page = page)
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-            modifier = Modifier.padding(vertical = AppSpacing.lg),
-        ) {
-            repeat(PAGE_COUNT) { index ->
-                val active = pagerState.currentPage == index
-                Box(
-                    modifier = Modifier
-                        .size(
-                            width = if (active) 20.dp else 6.dp,
-                            height = 6.dp,
-                        )
-                        .clip(AppShape.pill)
-                        .background(
-                            if (active) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.outlineVariant
-                            },
-                        ),
-                )
-            }
-        }
-
-        Button(
-            onClick = {
-                if (isLast) {
-                    onDone()
-                } else {
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = AppSpacing.xs),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_inlet_logo),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Spacer(Modifier.width(AppSpacing.sm))
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
-            },
-            shape = AppShape.pill,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-        ) {
-            Text(
-                stringResource(
-                    if (isLast) R.string.onboarding_get_started else R.string.onboarding_next,
-                ),
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            )
+                TextButton(onClick = onDone) {
+                    Text(
+                        text = stringResource(R.string.onboarding_skip),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) { page ->
+                OnboardingPage(page = page)
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+                modifier = Modifier.padding(vertical = AppSpacing.md),
+            ) {
+                repeat(PAGE_COUNT) { index ->
+                    val active = pagerState.currentPage == index
+                    val dotLabel = "Page ${index + 1} of $PAGE_COUNT"
+                    Box(
+                        modifier = Modifier
+                            .size(
+                                width = if (active) 20.dp else 6.dp,
+                                height = 6.dp,
+                            )
+                            .clip(AppShape.pill)
+                            .background(
+                                if (active) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outlineVariant
+                                },
+                            )
+                            .semantics { contentDescription = dotLabel },
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    if (isLast) {
+                        onDone()
+                    } else {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    }
+                },
+                shape = AppShape.pill,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+            ) {
+                Text(
+                    stringResource(
+                        if (isLast) R.string.onboarding_get_started else R.string.onboarding_next,
+                    ),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OnboardingPage(page: Int) {
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = AppSpacing.md),
+            .verticalScroll(scrollState)
+            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -192,7 +221,11 @@ private fun OnboardingPage(page: Int) {
 
         if (page == 0) {
             Spacer(Modifier.height(AppSpacing.xxl))
-            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 listOf("Any Model", "Your Keys", "Direct API").forEach { badge ->
                     Surface(
                         shape = AppShape.pill,
@@ -224,6 +257,7 @@ private fun OnboardingPage(page: Int) {
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .widthIn(max = 380.dp)
                         .padding(vertical = 3.dp),
                 ) {
                     Row(
