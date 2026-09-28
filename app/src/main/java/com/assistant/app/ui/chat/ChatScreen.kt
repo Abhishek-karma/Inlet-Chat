@@ -305,6 +305,8 @@ fun ChatScreen(
                 } else {
                     null
                 },
+                searchActive = state.searchEnabled,
+                onToggleSearch = if (searchAvailable) viewModel::toggleSearch else null,
             )
         }
     }

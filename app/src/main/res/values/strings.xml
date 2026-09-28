@@ -131,6 +131,7 @@
     <string name="settings_search_description">Optional. Answers can use web results when the Web toggle is on. Add a Brave Search API key to enable it.</string>
     
     <string name="settings_search_api_key">Search API key</string>
+    <string name="cd_toggle_search">Toggle web search</string>
     <!-- Reasoning display. -->
     <string name="settings_section_reasoning">Reasoning</string>
     <string name="settings_reasoning_visible">Show reasoning</string>

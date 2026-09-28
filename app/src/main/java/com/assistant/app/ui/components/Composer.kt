@@ -1,6 +1,5 @@
 package com.assistant.app.ui.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,11 +8,16 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledIconButton
@@ -41,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
+import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
@@ -97,10 +102,11 @@ data class ComposerAttachAction(
     val onClick: () -> Unit,
 )
 
-private const val COMPOSER_MAX_LINES = 6
+private const val COMPOSER_MAX_LINES = 8
 
 /**
- * Nara Composer: An ergonomic, unified sanctuary for writing, voice, and media.
+ * Modern, spacious AI chat composer.
+ * Focuses on comfortable typing and contextual actions without permanent toolbar clutter.
  */
 @Composable
 fun Composer(
@@ -113,50 +119,41 @@ fun Composer(
     onMicClick: (() -> Unit)? = null,
     voiceActive: Boolean = false,
     onAttachClick: (() -> Unit)? = null,
+    searchActive: Boolean = false,
+    onToggleSearch: (() -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
     val isNotBlank = value.isNotBlank()
-    val borderCol = if (isNotBlank || isGenerating) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    }
+    val borderCol by animateColorAsState(
+        targetValue = if (isNotBlank || isGenerating) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        },
+        animationSpec = appTween(AppMotion.MEDIUM),
+        label = "composerBorder",
+    )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacing.md, vertical = 6.dp),
+            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
         shape = AppShape.composer,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, borderCol),
     ) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        Column(
+            modifier = Modifier.padding(
+                horizontal = AppSpacing.sm,
+                vertical = AppSpacing.xs,
+            ),
         ) {
-            if (onAttachClick != null) {
-                IconButton(
-                    onClick = {
-                        haptics(HapticFeedbackType.TextHandleMove)
-                        onAttachClick.invoke()
-                    },
-                    modifier = Modifier.size(42.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(AppIcons.Add),
-                        contentDescription = stringResource(R.string.cd_attach_files),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
+            // Main Text Input Field
             TextField(
                 value = value,
                 onValueChange = onValueChange,
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 4.dp)
+                    .fillMaxWidth()
                     .testTag(ComposerInputTag),
                 placeholder = {
                     Text(
@@ -181,38 +178,119 @@ fun Composer(
                 ),
             )
 
-            if (onMicClick != null && !isGenerating && value.isBlank()) {
-                IconButton(
-                    onClick = {
-                        haptics(HapticFeedbackType.TextHandleMove)
-                        onMicClick()
-                    },
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (voiceActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                        ),
+            // Contextual Actions Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.xs, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // Left Contextual Tools (Attach & Web Search)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
                 ) {
-                    Icon(
-                        painter = painterResource(AppIcons.Mic),
-                        contentDescription = stringResource(R.string.cd_use_microphone),
-                        tint = if (voiceActive) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(20.dp),
+                    if (onAttachClick != null) {
+                        IconButton(
+                            onClick = {
+                                haptics(HapticFeedbackType.TextHandleMove)
+                                onAttachClick.invoke()
+                            },
+                            modifier = Modifier.size(44.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(AppIcons.Add),
+                                contentDescription = stringResource(R.string.cd_attach_files),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+
+                    if (onToggleSearch != null) {
+                        Surface(
+                            onClick = {
+                                haptics(HapticFeedbackType.TextHandleMove)
+                                onToggleSearch.invoke()
+                            },
+                            shape = AppShape.pill,
+                            color = if (searchActive) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                Color.Transparent
+                            },
+                            modifier = Modifier.height(36.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = AppSpacing.md),
+                            ) {
+                                Icon(
+                                    painter = painterResource(AppIcons.Globe),
+                                    contentDescription = stringResource(R.string.cd_toggle_search),
+                                    tint = if (searchActive) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(AppSpacing.xs))
+                                Text(
+                                    text = "Search",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        color = if (searchActive) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Right Contextual Controls (Mic & Send/Stop)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+                ) {
+                    if (onMicClick != null && !isGenerating && value.isBlank()) {
+                        IconButton(
+                            onClick = {
+                                haptics(HapticFeedbackType.TextHandleMove)
+                                onMicClick()
+                            },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (voiceActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                ),
+                        ) {
+                            Icon(
+                                painter = painterResource(AppIcons.Mic),
+                                contentDescription = stringResource(R.string.cd_use_microphone),
+                                tint = if (voiceActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+
+                    SendButton(
+                        isGenerating = isGenerating,
+                        enabled = isGenerating || isNotBlank,
+                        onSend = onSend,
+                        onStop = onStop,
                     )
                 }
             }
-
-            SendButton(
-                isGenerating = isGenerating,
-                enabled = isGenerating || isNotBlank,
-                onSend = onSend,
-                onStop = onStop,
-            )
         }
     }
 }
@@ -251,8 +329,7 @@ private fun SendButton(
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
         ),
         modifier = Modifier
-            .padding(all = 4.dp)
-            .size(36.dp)
+            .size(44.dp)
             .semantics { contentDescription = actionLabel }
             .graphicsLayer { scaleX = scale; scaleY = scale },
     ) {
@@ -260,8 +337,8 @@ private fun SendButton(
             if (generating) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .size(14.dp)
+                        .clip(RoundedCornerShape(3.dp))
                         .background(MaterialTheme.colorScheme.onError),
                 )
             } else {
@@ -269,7 +346,7 @@ private fun SendButton(
                     painter = painterResource(AppIcons.Send),
                     contentDescription = null,
                     tint = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
