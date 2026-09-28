@@ -583,4 +583,52 @@ class MessageTextTest {
         assertEquals(listOf("a|b", "c"), table.headers.map { it.text })
         assertEquals(listOf("d", "e|f"), table.rows[0].map { it.text })
     }
+
+    @Test
+    fun latexBlockParsesCorrectly() {
+        val blocks = messageBlocks("Prose before\n$$\nE = mc^2\n$$\nProse after")
+
+        assertEquals(3, blocks.size)
+        assertTrue(blocks[0] is MessageBlock.Paragraph)
+        assertTrue(blocks[1] is MessageBlock.LaTeXBlock)
+        assertTrue(blocks[2] is MessageBlock.Paragraph)
+        assertEquals("E = mc^2", (blocks[1] as MessageBlock.LaTeXBlock).formula)
+    }
+
+    @Test
+    fun inlineMathAndCurrencySafety() {
+        // Correct inline math
+        val mathText = richText("Solution is \$x^2 + y^2 = r^2\$ now.")
+        assertEquals("Solution is x^2 + y^2 = r^2 now.", mathText.text)
+
+        // Financial false positives must stay literal
+        val priceText = richText("It costs \$10 and then another \$20 dollars.")
+        assertEquals("It costs \$10 and then another \$20 dollars.", priceText.text)
+    }
+
+    @Test
+    fun mermaidDiagramBlockParsesCorrectly() {
+        val blocks = messageBlocks("```mermaid\ngraph TD\n  A --> B\n```")
+        assertEquals(1, blocks.size)
+        assertTrue(blocks[0] is MessageBlock.Diagram)
+        assertEquals("graph TD\n  A --> B", (blocks[0] as MessageBlock.Diagram).code)
+    }
+
+    @Test
+    fun performanceWithVeryLongMessagesIsLinearlyBounded() {
+        val sb = StringBuilder()
+        repeat(500) {
+            sb.append("This is an extremely long line number \$it that goes on and on.\n")
+            sb.append("- bullet point list item number \$it\n")
+            sb.append("| Header A | Header B |\n| --- | --- |\n| Cell A \$it | Cell B \$it |\n")
+        }
+        val start = System.currentTimeMillis()
+        val blocks = messageBlocks(sb.toString())
+        val duration = System.currentTimeMillis() - start
+        
+        assertTrue(blocks.isNotEmpty())
+        // Should parse 500 blocks of tables, lists and paragraphs in sub-second (usually < 100ms)
+        assertTrue("Parsing extremely long text must be extremely fast", duration < 1000)
+    }
 }
+
