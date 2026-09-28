@@ -391,13 +391,12 @@ class SettingsViewModelTest {
             awaitSettled(viewModel)
             viewModel.loadVoices()
             viewModel.setVoiceId(NATURAL.id)
-            advanceUntilIdle()
+            appPreferences.voiceId.firstBounded("voiceId = ${NATURAL.id}") { it == NATURAL.id }
 
             viewModel.setVoiceId(null)
-            advanceUntilIdle()
+            appPreferences.voiceId.firstBounded("voiceId cleared") { it == null }
 
             assertNull(viewModel.uiState.value.voiceId)
-            assertNull(appPreferences.voiceId.firstBounded("voiceId cleared") { it == null })
         }
 
     @Test

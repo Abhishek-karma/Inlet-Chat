@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 
 /**
- * Inlet Chat design tokens: spacing, ergonomic shapes, and layout constants.
+ * Predictable, 4dp-base spacing scale for the entire application.
  */
 object AppSpacing {
     val xxs = 2.dp
@@ -25,19 +25,32 @@ object AppSpacing {
     val xxxl = 48.dp
 }
 
+/**
+ * Unified shape design tokens. Avoid random radii across composables.
+ */
 object AppShape {
+    val extraSmall = RoundedCornerShape(8.dp)
     val small = RoundedCornerShape(12.dp)
-    val medium = RoundedCornerShape(18.dp)
-    val large = RoundedCornerShape(26.dp)
-    val userBubble = RoundedCornerShape(22.dp, 22.dp, 6.dp, 22.dp)
-    val assistantBubble = RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp)
-    val composer = RoundedCornerShape(28.dp)
-    val bubble = RoundedCornerShape(20.dp)
-    val card = RoundedCornerShape(20.dp)
+    val medium = RoundedCornerShape(16.dp)
+    val large = RoundedCornerShape(24.dp)
+    val extraLarge = RoundedCornerShape(32.dp)
     val pill = RoundedCornerShape(50)
+
+    // Specific conversational components mapped to standard tokens
+    val userBubble = RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
+    val assistantBubble = RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
+    val composer = RoundedCornerShape(28.dp)
+    val card = RoundedCornerShape(16.dp)
+    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 }
 
+/**
+ * Dimensions and touch target standards.
+ */
 object AppDimens {
+    val minTouchTarget = 48.dp
+    val prominentTouchTarget = 56.dp
+    val iconButtonSize = 48.dp
     val maxContentWidth = 720.dp
 }
 
