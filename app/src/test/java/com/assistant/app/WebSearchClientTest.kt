@@ -1,8 +1,15 @@
 package com.assistant.app
 
+import com.assistant.app.llm.ContentExtractor
+import com.assistant.app.llm.HttpPageFetcher
+import com.assistant.app.llm.JsoupContentExtractor
+import com.assistant.app.llm.PageFetcher
+import com.assistant.app.llm.SearXNGSearchProvider
 import com.assistant.app.llm.WebSearchClient
+import com.assistant.app.llm.WebSearchProvider
 import com.assistant.app.llm.model.SearchError
 import com.assistant.app.llm.model.SearchOutcome
+import com.assistant.app.llm.model.SearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -10,6 +17,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -18,12 +26,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 
-/**
- * Behavior contract for the web search client against MockWebServer:
- * response-shape tolerance, result capping and filtering, and error mapping.
- *
- * Runs under Robolectric because the client parses responses with org.json.
- */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class WebSearchClientTest {
@@ -41,139 +43,256 @@ class WebSearchClientTest {
         server.shutdown()
     }
 
-    private fun client(apiKey: String = "sk-search-key") = WebSearchClient(
+    private fun client(
+        apiKey: String? = null,
+        maxPagesToFetch: Int = 2,
+    ) = WebSearchClient(
         client = OkHttpClient.Builder()
             .callTimeout(5, TimeUnit.SECONDS)
             .build(),
-        apiKey = apiKey,
         endpoint = server.url("/search").toString(),
+        apiKey = apiKey,
         dispatcher = Dispatchers.Unconfined,
+        maxPagesToFetch = maxPagesToFetch,
     )
 
-    private fun search(client: WebSearchClient = client(), query: String = "hello", max: Int = 5) =
-        runBlocking { client.search(query, max) }
-
     @Test
-    fun `brave shaped response parses nested web results`() {
+    fun `searxng json response parses results correctly without requiring an api key`() {
         server.enqueue(
             MockResponse().setBody(
-                """{"web":{"results":[
-                    {"title":"Brave","url":"https://brave.example","description":"desc here"}
-                ]}}""",
+                """{
+                    "query": "kotlin",
+                    "results": [
+                        {
+                            "title": "Kotlin Programming Language",
+                            "url": "${server.url("/page1")}",
+                            "content": "Official Kotlin site",
+                            "engine": "google"
+                        },
+                        {
+                            "title": "Kotlin Wikipedia",
+                            "url": "${server.url("/page2")}",
+                            "content": "Wikipedia article on Kotlin",
+                            "engine": "wikipedia"
+                        }
+                    ]
+                }""",
             ),
         )
-
-        val outcome = search()
-
-        assertEquals(
-            SearchOutcome.Success(
-                listOf(com.assistant.app.llm.model.SearchResult("Brave", "https://brave.example", "desc here")),
-            ),
-            outcome,
-        )
-    }
-
-    @Test
-    fun `the key is sent as a header and never in the query`() {
+        // Enqueue HTML for page1 and page2
         server.enqueue(
-            MockResponse().setBody("""{"web":{"results":[{"title":"t","url":"https://e.example","description":"d"}]}}"""),
+            MockResponse()
+                .setHeader("Content-Type", "text/html; charset=utf-8")
+                .setBody("<html><head><title>Kotlin Lang</title></head><body><article><p>Kotlin is a modern language.</p></article></body></html>"),
+        )
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/html; charset=utf-8")
+                .setBody("<html><head><title>Kotlin Wiki</title></head><body><p>General purpose programming language.</p></body></html>"),
         )
 
-        search()
+        val outcome = runBlocking { client(apiKey = null).search("kotlin", maxResults = 5) }
 
-        val recorded = server.takeRequest()
-        assertEquals("sk-search-key", recorded.getHeader("X-Subscription-Token"))
-        assertTrue(!recorded.path.orEmpty().contains("sk-search-key"))
+        assertTrue(outcome is SearchOutcome.Success)
+        val results = (outcome as SearchOutcome.Success).results
+        assertEquals(2, results.size)
+        assertEquals("Kotlin Lang", results[0].title)
+        assertTrue(results[0].snippet.contains("Kotlin is a modern language."))
+        assertEquals(server.url("/page1").toString(), results[0].url)
+        assertEquals("google", results[0].engine)
     }
 
     @Test
-    fun `a blank key fails without a request`() {
-        val outcome = search(client(apiKey = "  "))
-
-        assertEquals(SearchError.NoResults, (outcome as SearchOutcome.Failure).error)
-        assertEquals(0, server.requestCount)
-    }
-
-    @Test
-    fun `results are capped at maxResults`() {
-        val entries = (1..10).joinToString(",") {
-            """{"title":"T$it","url":"https://e$it.example","description":"s"}"""
-        }
-        server.enqueue(MockResponse().setBody("""{"web":{"results":[$entries]}}"""))
-
-        val results = (search(max = 3) as SearchOutcome.Success).results
-
-        assertEquals(3, results.size)
-        assertEquals("https://e1.example", results[0].url)
-        assertEquals("https://e3.example", results[2].url)
-    }
-
-    @Test
-    fun `entries without a url are skipped`() {
+    fun `duplicate URLs are deduplicated`() {
         server.enqueue(
             MockResponse().setBody(
-                """{"web":{"results":[
-                    {"title":"no url","description":"s"},
-                    {"title":"good","url":"https://good.example","description":"s"}
-                ]}}""",
+                """{
+                    "results": [
+                        {"title": "Page 1", "url": "https://example.com/item", "content": "Desc 1"},
+                        {"title": "Page 1 Duplicate", "url": "https://example.com/item/", "content": "Desc 2"},
+                        {"title": "Page 2", "url": "https://example.com/other", "content": "Desc 3"}
+                    ]
+                }""",
             ),
         )
 
-        val outcome = search()
-
-        assertEquals(
-            SearchOutcome.Success(
-                listOf(com.assistant.app.llm.model.SearchResult("good", "https://good.example", "s")),
-            ),
-            outcome,
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
+            dispatcher = Dispatchers.Unconfined,
         )
+
+        val outcome = runBlocking { provider.search("query", maxResults = 5) }
+        assertTrue(outcome is SearchOutcome.Success)
+        val results = (outcome as SearchOutcome.Success).results
+        assertEquals(2, results.size)
+        assertEquals("https://example.com/item", results[0].url)
+        assertEquals("https://example.com/other", results[1].url)
+    }
+
+    @Test
+    fun `invalid and non-http URLs are skipped`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{
+                    "results": [
+                        {"title": "Invalid 1", "url": "javascript:alert(1)", "content": "bad"},
+                        {"title": "Invalid 2", "url": "", "content": "empty"},
+                        {"title": "Valid", "url": "https://example.com/valid", "content": "good"}
+                    ]
+                }""",
+            ),
+        )
+
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
+            dispatcher = Dispatchers.Unconfined,
+        )
+
+        val outcome = runBlocking { provider.search("query", maxResults = 5) }
+        assertTrue(outcome is SearchOutcome.Success)
+        val results = (outcome as SearchOutcome.Success).results
+        assertEquals(1, results.size)
+        assertEquals("https://example.com/valid", results[0].url)
+    }
+
+    @Test
+    fun `optional api key is sent in auth headers`() {
+        server.enqueue(MockResponse().setBody("""{"results":[]}"""))
+
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
+            apiKey = "custom-secret-key",
+            dispatcher = Dispatchers.Unconfined,
+        )
+
+        runBlocking { provider.search("query", maxResults = 5) }
+
+        val request = server.takeRequest()
+        assertEquals("Bearer custom-secret-key", request.getHeader("Authorization"))
+        assertEquals("custom-secret-key", request.getHeader("X-Subscription-Token"))
     }
 
     @Test
     fun `empty results map to NoResults`() {
-        server.enqueue(MockResponse().setBody("""{"web":{"results":[]}}"""))
-        server.enqueue(MockResponse().setBody("""{}"""))
-
-        assertEquals(SearchError.NoResults, (search() as SearchOutcome.Failure).error)
-        assertEquals(SearchError.NoResults, (search() as SearchOutcome.Failure).error)
+        server.enqueue(MockResponse().setBody("""{"results":[]}"""))
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
+            dispatcher = Dispatchers.Unconfined,
+        )
+        val outcome = runBlocking { provider.search("query", maxResults = 5) }
+        assertEquals(SearchError.NoResults, (outcome as SearchOutcome.Failure).error)
     }
 
     @Test
     fun `malformed json maps to InvalidResponse`() {
-        server.enqueue(MockResponse().setBody("{not json"))
-
-        assertEquals(SearchError.InvalidResponse, (search() as SearchOutcome.Failure).error)
+        server.enqueue(MockResponse().setBody("{invalid-json"))
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
+            dispatcher = Dispatchers.Unconfined,
+        )
+        val outcome = runBlocking { provider.search("query", maxResults = 5) }
+        assertEquals(SearchError.InvalidResponse, (outcome as SearchOutcome.Failure).error)
     }
 
     @Test
-    fun `401 and 500 map to InvalidCredentials and ServerError`() {
-        server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
-        server.enqueue(MockResponse().setResponseCode(500).setBody("{}"))
-
-        assertEquals(SearchError.InvalidCredentials, (search() as SearchOutcome.Failure).error)
-        assertEquals(SearchError.ServerError, (search() as SearchOutcome.Failure).error)
-    }
-
-    @Test
-    fun `connection failure maps to NetworkUnavailable`() {
-        val unreachable = WebSearchClient(
-            client = OkHttpClient.Builder().callTimeout(5, TimeUnit.SECONDS).build(),
-            apiKey = "sk-search-key",
-            endpoint = "http://127.0.0.1:9/search",
+    fun `401 and 429 and 500 error codes map to proper SearchError`() {
+        val provider = SearXNGSearchProvider(
+            client = OkHttpClient(),
+            endpoint = server.url("/search").toString(),
             dispatcher = Dispatchers.Unconfined,
         )
 
-        val outcome = runBlocking { unreachable.search("q") }
+        server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
+        assertEquals(SearchError.InvalidCredentials, (runBlocking { provider.search("q", 5) } as SearchOutcome.Failure).error)
 
-        assertEquals(SearchError.NetworkUnavailable, (outcome as SearchOutcome.Failure).error)
+        server.enqueue(MockResponse().setResponseCode(429).setBody("{}"))
+        assertEquals(SearchError.RateLimited, (runBlocking { provider.search("q", 5) } as SearchOutcome.Failure).error)
+
+        server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+        assertEquals(SearchError.ServerError, (runBlocking { provider.search("q", 5) } as SearchOutcome.Failure).error)
     }
 
     @Test
-    fun `request carries the encoded query`() {
-        server.enqueue(MockResponse().setBody("""{"web":{"results":[]}}"""))
+    fun `page fetcher skips non-text content types`() {
+        val fetcher = HttpPageFetcher(
+            client = OkHttpClient(),
+            dispatcher = Dispatchers.Unconfined,
+        )
 
-        search(query = "kotlin coroutines & flow", max = 5)
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "image/png")
+                .setBody("binary-png-data"),
+        )
 
-        assertEquals("/search?q=kotlin%20coroutines%20%26%20flow&count=5", server.takeRequest().path)
+        val result = runBlocking { fetcher.fetch(server.url("/image.png").toString()) }
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `jsoup extractor removes clutter and extracts clean article text`() {
+        val extractor = JsoupContentExtractor()
+        val html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Test Article Title</title>
+            </head>
+            <body>
+                <header><nav><a href="/">Home</a></nav></header>
+                <div class="cookie-banner">Please accept our cookies</div>
+                <div class="advertisement">Buy this product!</div>
+                <article>
+                    <h1>Main Headline</h1>
+                    <p>First paragraph with informative text.</p>
+                    <ul>
+                        <li>Bullet point 1</li>
+                        <li>Bullet point 2</li>
+                    </ul>
+                </article>
+                <footer>Copyright 2026</footer>
+            </body>
+            </html>
+        """.trimIndent()
+
+        val extracted = extractor.extract(html, "https://example.com/post")
+        assertEquals("Test Article Title", extracted.title)
+        assertTrue(extracted.text.contains("Main Headline"))
+        assertTrue(extracted.text.contains("First paragraph with informative text."))
+        assertTrue(extracted.text.contains("• Bullet point 1"))
+        assertFalse(extracted.text.contains("Please accept our cookies"))
+        assertFalse(extracted.text.contains("Buy this product!"))
+        assertFalse(extracted.text.contains("Copyright 2026"))
+    }
+
+    @Test
+    fun `page fetch failure falls back gracefully to search snippet`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{
+                    "results": [
+                        {
+                            "title": "Page 1",
+                            "url": "${server.url("/error-page")}",
+                            "content": "Original search snippet text"
+                        }
+                    ]
+                }""",
+            ),
+        )
+        // Enqueue 404 for page fetch
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val outcome = runBlocking { client().search("query", maxResults = 1) }
+
+        assertTrue(outcome is SearchOutcome.Success)
+        val result = (outcome as SearchOutcome.Success).results.first()
+        assertEquals("Page 1", result.title)
+        assertEquals("Original search snippet text", result.snippet)
     }
 }

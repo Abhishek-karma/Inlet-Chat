@@ -80,6 +80,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.jsoup)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

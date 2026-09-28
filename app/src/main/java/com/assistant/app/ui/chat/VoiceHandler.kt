@@ -38,9 +38,13 @@ class VoiceHandler(
         }
         stopSpeaking()
         val currentStatus = repository.uiState.value.voiceStatus
-        if (currentStatus == VoiceStatus.Listening || currentStatus == VoiceStatus.Transcribing) {
+        if (currentStatus == VoiceStatus.Listening || currentStatus == VoiceStatus.Processing) {
             stopListening()
             return
+        }
+        if (currentStatus == VoiceStatus.Error) {
+            repository.setVoiceStatus(VoiceStatus.Idle)
+            repository.setVoiceHint(false)
         }
         repository.setVoiceHint(false)
         recognitionSession++
@@ -54,7 +58,7 @@ class VoiceHandler(
 
     private fun onVoiceEvent(event: VoiceInputEvent) {
         when (event) {
-            is VoiceInputEvent.Transcribing -> repository.setVoiceStatus(VoiceStatus.Transcribing)
+            is VoiceInputEvent.Transcribing -> repository.setVoiceStatus(VoiceStatus.Processing)
             is VoiceInputEvent.Transcript -> {
                 recognitionSession++
                 repository.setVoiceStatus(VoiceStatus.Idle)
@@ -62,9 +66,13 @@ class VoiceHandler(
             }
             is VoiceInputEvent.Failed -> {
                 recognitionSession++
-                repository.setVoiceStatus(VoiceStatus.Idle)
                 if (event.kind == VoiceInputError.NoMatch) {
+                    repository.setVoiceStatus(VoiceStatus.Idle)
                     repository.setVoiceHint(true)
+                } else if (event.kind == VoiceInputError.MicUnavailable) {
+                    repository.setVoiceStatus(VoiceStatus.Error)
+                } else {
+                    repository.setVoiceStatus(VoiceStatus.Idle)
                 }
             }
         }
@@ -74,7 +82,7 @@ class VoiceHandler(
         recognitionSession++
         voiceInput.stop()
         val status = repository.uiState.value.voiceStatus
-        if (status == VoiceStatus.Listening || status == VoiceStatus.Transcribing) {
+        if (status == VoiceStatus.Listening || status == VoiceStatus.Processing || status == VoiceStatus.Error) {
             repository.setVoiceStatus(VoiceStatus.Idle)
         }
     }
@@ -103,7 +111,10 @@ class VoiceHandler(
     }
 
     private fun startSpeaking(content: String) {
-        if (!voiceOutput.isAvailable) return
+        if (!voiceOutput.isAvailable) {
+            repository.setVoiceStatus(VoiceStatus.Error)
+            return
+        }
         speechSession++
         val session = speechSession
         repository.setVoiceStatus(VoiceStatus.Speaking)

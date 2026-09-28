@@ -67,11 +67,15 @@ data class SettingsUiState(
     val appearance: AppTheme = AppTheme.SYSTEM,
     val textSize: TextSize = TextSize.NORMAL,
     val reasoningVisible: Boolean = true,
+    val searchEndpointInput: String = "",
+    val storedSearchEndpoint: String = AppPreferences.DEFAULT_SEARCH_ENDPOINT,
     val searchApiKeyInput: String = "",
     val storedSearchKey: String? = null,
     val searchFormError: String? = null,
     val isSearchSaving: Boolean = false,
-    val searchConfigured: Boolean = false,
+    val isSearchTesting: Boolean = false,
+    val searchTestOutcome: ConnectionOutcome? = null,
+    val searchConfigured: Boolean = true,
     val ttsAvailable: Boolean = true,
     val isLoaded: Boolean = false,
     val isSaving: Boolean = false,
@@ -85,6 +89,7 @@ data class SettingsUiState(
             "storedKey=${if (storedKey != null) "<present>" else "null"}, " +
             "revealKey=$revealKey, voiceOutputEnabled=$voiceOutputEnabled, " +
             "appearance=$appearance, reasoningVisible=$reasoningVisible, " +
+            "searchEndpointInput=$searchEndpointInput, storedSearchEndpoint=$storedSearchEndpoint, " +
             "searchApiKeyInput=<redacted>, storedSearchKey=${if (storedSearchKey != null) "<present>" else "null"}, " +
             "ttsAvailable=$ttsAvailable, " +
             "isLoaded=$isLoaded, " +
@@ -98,6 +103,7 @@ class SettingsViewModel(
     private val appPreferences: AppPreferences,
     private val secureKeyStore: SecureKeyStore,
     private val newTestProvider: (baseUrl: String, model: String, apiKey: String) -> LlmProvider,
+    private val newTestSearch: (suspend (endpoint: String, apiKey: String?) -> com.assistant.app.llm.model.SearchOutcome)? = null,
     private val modelsClient: ProviderModelsClient = ProviderModelsClient(),
     private val ttsAvailable: Boolean = true,
     private val voiceOutput: VoiceOutput? = null,
@@ -119,6 +125,7 @@ class SettingsViewModel(
             val appearance = appPreferences.appearance.first()
             val textSize = appPreferences.textSize.first()
             val reasoningVisible = appPreferences.reasoningVisible.first()
+            val storedSearchEndpoint = appPreferences.searchEndpoint.first()
             val storedSearchKey = secureKeyStore.searchApiKey()
             _uiState.update {
                 it.copy(
@@ -129,8 +136,9 @@ class SettingsViewModel(
                     appearance = appearance,
                     textSize = textSize,
                     reasoningVisible = reasoningVisible,
+                    storedSearchEndpoint = storedSearchEndpoint,
                     storedSearchKey = storedSearchKey,
-                    searchConfigured = storedSearchKey != null,
+                    searchConfigured = isHttpUrl(storedSearchEndpoint),
                     isLoaded = true,
                 )
             }
@@ -489,25 +497,83 @@ class SettingsViewModel(
         }
     }
 
+    fun setSearchEndpointInput(value: String) {
+        _uiState.update { it.copy(searchEndpointInput = value, searchFormError = null, searchTestOutcome = null) }
+    }
+
     fun setSearchApiKeyInput(value: String) {
-        _uiState.update { it.copy(searchApiKeyInput = value, searchFormError = null) }
+        _uiState.update { it.copy(searchApiKeyInput = value, searchFormError = null, searchTestOutcome = null) }
+    }
+
+    fun resetSearchEndpointToDefault() {
+        _uiState.update {
+            it.copy(
+                searchEndpointInput = AppPreferences.DEFAULT_SEARCH_ENDPOINT,
+                searchFormError = null,
+                searchTestOutcome = null,
+            )
+        }
+    }
+
+    fun testSearch() {
+        if (_uiState.value.isSearchTesting) return
+        val state = _uiState.value
+        val endpoint = state.searchEndpointInput.trim().ifEmpty { state.storedSearchEndpoint }
+        val apiKey = state.searchApiKeyInput.trim().ifEmpty { state.storedSearchKey }
+
+        if (!isHttpUrl(endpoint)) {
+            _uiState.update { it.copy(searchFormError = SEARCH_URL_INVALID) }
+            return
+        }
+
+        _uiState.update { it.copy(isSearchTesting = true, searchTestOutcome = null) }
+        viewModelScope.launch {
+            val outcome = try {
+                val tester = newTestSearch ?: { ep, key ->
+                    com.assistant.app.llm.SearXNGSearchProvider(okhttp3.OkHttpClient(), endpoint = ep, apiKey = key).search("test", 1)
+                }
+                tester(endpoint, apiKey)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.assistant.app.llm.model.SearchOutcome.Failure(com.assistant.app.llm.model.SearchError.Unknown, e.message)
+            }
+
+            _uiState.update {
+                it.copy(
+                    isSearchTesting = false,
+                    searchTestOutcome = when (outcome) {
+                        is com.assistant.app.llm.model.SearchOutcome.Success -> ConnectionOutcome.Success
+                        is com.assistant.app.llm.model.SearchOutcome.Failure -> ConnectionOutcome.Failure(outcome.error.userMessage, outcome.detail)
+                    },
+                )
+            }
+        }
     }
 
     fun saveSearch() {
         if (_uiState.value.isSearchSaving) return
+        val state = _uiState.value
+        val enteredEndpoint = state.searchEndpointInput.trim()
+        val enteredKey = state.searchApiKeyInput.trim()
+
+        val targetEndpoint = if (enteredEndpoint.isNotEmpty()) enteredEndpoint else state.storedSearchEndpoint
+        if (!isHttpUrl(targetEndpoint)) {
+            _uiState.update { it.copy(searchFormError = SEARCH_URL_INVALID) }
+            return
+        }
+
+        _uiState.update { it.copy(isSearchSaving = true, searchFormError = null) }
         viewModelScope.launch {
-            val state = _uiState.value
-            val enteredKey = state.searchApiKeyInput.trim()
-            if (enteredKey.isEmpty() && state.storedSearchKey == null) {
-                _uiState.update { it.copy(searchFormError = null) }
-                return@launch
-            }
-            _uiState.update { it.copy(isSearchSaving = true) }
             try {
-                if (enteredKey.isEmpty()) {
-                    secureKeyStore.setSearchApiKey(null)
-                } else {
+                if (enteredEndpoint.isNotEmpty()) {
+                    appPreferences.setSearchEndpoint(enteredEndpoint)
+                }
+                if (enteredKey.isNotEmpty()) {
                     secureKeyStore.setSearchApiKey(enteredKey)
+                } else if (state.searchApiKeyInput.isNotEmpty()) {
+                    // Cleared
+                    secureKeyStore.setSearchApiKey(null)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -515,16 +581,21 @@ class SettingsViewModel(
                 _uiState.update { it.copy(isSearchSaving = false, searchFormError = SAVE_FAILED) }
                 return@launch
             }
+
+            val currentEndpoint = appPreferences.searchEndpoint.first()
+            val currentKey = secureKeyStore.searchApiKey()
             _uiState.update {
                 it.copy(
                     isSearchSaving = false,
+                    searchEndpointInput = "",
                     searchApiKeyInput = "",
-                    storedSearchKey = secureKeyStore.searchApiKey(),
+                    storedSearchEndpoint = currentEndpoint,
+                    storedSearchKey = currentKey,
                     searchFormError = null,
-                    searchConfigured = secureKeyStore.searchApiKey() != null,
+                    searchConfigured = isHttpUrl(currentEndpoint),
                 )
             }
-            appPreferences.setSearchConfigured(secureKeyStore.searchApiKey() != null)
+            appPreferences.setSearchConfigured(isHttpUrl(currentEndpoint))
         }
     }
 
@@ -563,11 +634,12 @@ class SettingsViewModel(
         }
     }
 
-        class Factory(
+    class Factory(
         private val providerStore: ProviderStore,
         private val appPreferences: AppPreferences,
         private val secureKeyStore: SecureKeyStore,
         private val newTestProvider: (baseUrl: String, model: String, apiKey: String) -> LlmProvider,
+        private val newTestSearch: (suspend (endpoint: String, apiKey: String?) -> com.assistant.app.llm.model.SearchOutcome)? = null,
         private val modelsClient: ProviderModelsClient = ProviderModelsClient(),
         private val ttsAvailable: Boolean = true,
         private val voiceOutput: VoiceOutput? = null,
@@ -582,6 +654,7 @@ class SettingsViewModel(
                 appPreferences,
                 secureKeyStore,
                 newTestProvider,
+                newTestSearch,
                 modelsClient,
                 ttsAvailable,
                 voiceOutput,
@@ -597,7 +670,7 @@ class SettingsViewModel(
         false
     }
 
-    private companion object {
+    companion object {
         private const val TAG = "SettingsViewModel"
         const val PING_MESSAGE = "ping"
         const val SAVE_FAILED = "Could not save settings."

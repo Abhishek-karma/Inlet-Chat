@@ -77,14 +77,30 @@ class AppPreferences(
     }
 
 
-    /** Whether a web-search API key is stored. The key itself is in [SecureKeyStore]. */
+    /** Whether web search is enabled/available for use. Available out of the box. */
     val searchConfigured: Flow<Boolean> = dataStore.data.map { prefs ->
-        prefs[KEY_SEARCH_CONFIGURED] ?: false
+        prefs[KEY_SEARCH_CONFIGURED] ?: true
     }
 
-    /** Records whether a search key is stored, without holding the key. */
+    /** Records whether search is configured/enabled. */
     suspend fun setSearchConfigured(configured: Boolean) {
         dataStore.edit { prefs -> prefs[KEY_SEARCH_CONFIGURED] = configured }
+    }
+
+    /** Configured SearXNG instance endpoint URL. */
+    val searchEndpoint: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_SEARCH_ENDPOINT]?.takeIf { it.isNotBlank() } ?: DEFAULT_SEARCH_ENDPOINT
+    }
+
+    /** Updates the configured search endpoint. */
+    suspend fun setSearchEndpoint(endpoint: String?) {
+        dataStore.edit { prefs ->
+            if (endpoint.isNullOrBlank()) {
+                prefs.remove(KEY_SEARCH_ENDPOINT)
+            } else {
+                prefs[KEY_SEARCH_ENDPOINT] = endpoint.trim()
+            }
+        }
     }
 
     /** The reading text size; [TextSize.NORMAL] until the user picks one. */
@@ -193,7 +209,7 @@ class AppPreferences(
         val enabled: Boolean,
     )
 
-    private companion object {
+    companion object {
         private const val DATA_STORE_FILE = "provider_settings.preferences_pb"
 
         private val KEY_ID = longPreferencesKey("id")
@@ -210,7 +226,9 @@ class AppPreferences(
         private val KEY_VOICE_SPEED = floatPreferencesKey("voice_speed")
         private val KEY_VOICE_ID = stringPreferencesKey("voice_id")
         private val KEY_SEARCH_CONFIGURED = booleanPreferencesKey("search_configured")
+        private val KEY_SEARCH_ENDPOINT = stringPreferencesKey("search_endpoint")
 
+        const val DEFAULT_SEARCH_ENDPOINT = "https://searx.be/search"
         const val DEFAULT_VOICE_SPEED = 1.0f
         const val MIN_VOICE_SPEED = 0.5f
         const val MAX_VOICE_SPEED = 2.0f

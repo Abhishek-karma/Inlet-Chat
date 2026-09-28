@@ -452,4 +452,36 @@ class VoiceChatTest {
             isVoiceOutputEnabled = { true },
         )
     }
+
+    @Test
+    fun `mic failure with unavailable hardware sets Error state and can be retried`() = runVoiceTest { viewModel, input, _ ->
+        viewModel.onMicClick()
+        assertEquals(VoiceStatus.Listening, viewModel.uiState.value.voiceStatus)
+
+        input.emit(VoiceInputEvent.Failed(VoiceInputError.MicUnavailable))
+        assertEquals(VoiceStatus.Error, viewModel.uiState.value.voiceStatus)
+
+        // Tapping mic while in Error state resets it and starts listening again
+        viewModel.onMicClick()
+        assertEquals(VoiceStatus.Listening, viewModel.uiState.value.voiceStatus)
+    }
+
+    @Test
+    fun `unavailable voice output transitions to Error state instead of hanging`() = runTest {
+        val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(mainDispatcher)
+        val provider = FakeLlmProvider(listOf(ScriptedEvent.Emit("Hello")))
+        val chatLlm = MutableStateFlow<ChatLlmState>(ChatLlmState.Ready(provider, "test-model"))
+        val unavailVm = ChatViewModel(
+            repository = ChatRepository(chatLlm, generationDispatcher = mainDispatcher),
+            chatLlm = chatLlm,
+            voiceOutput = VoiceOutput.unavailable(),
+            isVoiceOutputEnabled = { true },
+            voiceAutoPlay = { true },
+        )
+        unavailVm.send("Hi")
+        advanceUntilIdle()
+        assertEquals(VoiceStatus.Error, unavailVm.uiState.value.voiceStatus)
+    }
 }
+

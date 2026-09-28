@@ -227,7 +227,8 @@ fun ChatScreen(
     val error = state.status as? ChatStatus.Error
     val isGenerating = state.status is ChatStatus.Generating
     val voiceActive = state.voiceStatus == VoiceStatus.Listening ||
-        state.voiceStatus == VoiceStatus.Transcribing
+        state.voiceStatus == VoiceStatus.Processing ||
+        state.voiceStatus == VoiceStatus.Speaking
     val showSetupPrompt = state.needsSetup && state.messages.isEmpty()
     val suggestions = state.messages.lastOrNull()
         ?.takeIf { !isGenerating && it.role == Role.ASSISTANT }
@@ -235,8 +236,14 @@ fun ChatScreen(
         .orEmpty()
     val composerHint: () -> String? = {
         when {
+            state.voiceStatus == VoiceStatus.Listening ->
+                context.getString(R.string.voice_listening_hint)
+            state.voiceStatus == VoiceStatus.Processing ->
+                context.getString(R.string.voice_processing_hint)
             state.voiceStatus == VoiceStatus.Speaking ->
                 context.getString(R.string.voice_speaking_hint)
+            state.voiceStatus == VoiceStatus.Error ->
+                context.getString(R.string.voice_error_hint)
             showMicRationale -> context.getString(R.string.voice_mic_rationale)
             state.voiceHint -> context.getString(R.string.voice_no_match_hint)
             else -> state.searchNotice
@@ -375,8 +382,14 @@ fun ChatScreen(
                 },
                 onStop = viewModel::stop,
                 isGenerating = isGenerating,
-                onMicClick = if (viewModel.isVoiceInputAvailable) startVoiceInput else null,
+                onMicClick = when (state.voiceStatus) {
+                    VoiceStatus.Speaking, VoiceStatus.Listening, VoiceStatus.Processing -> {
+                        { viewModel.onMicClick() }
+                    }
+                    else -> if (viewModel.isVoiceInputAvailable) startVoiceInput else null
+                },
                 voiceActive = voiceActive,
+                voiceStatus = state.voiceStatus,
                 onAttachClick = if (attachActions.isNotEmpty() || searchAvailable) {
                     { showAttachSheet = true }
                 } else {

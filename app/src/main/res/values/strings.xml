@@ -128,9 +128,13 @@
     <string name="menu_speak">Speak</string>
     <!-- Web search. -->
     <string name="settings_section_search">Web search</string>
-    <string name="settings_search_description">Optional. Answers can use web results when the Web toggle is on. Add a Brave Search API key to enable it.</string>
-    
-    <string name="settings_search_api_key">Search API key</string>
+    <string name="settings_search_description">Answers can use live web results when Web search is toggled in chat. Powered by open SearXNG metasearch with zero paid API keys required.</string>
+    <string name="settings_search_endpoint">Search service URL</string>
+    <string name="settings_search_endpoint_hint">https://searx.be/search</string>
+    <string name="settings_search_api_key">Instance key (optional)</string>
+    <string name="settings_search_reset_default">Reset to default service</string>
+    <string name="settings_search_test">Test search</string>
+    <string name="settings_search_testing">Testing search…</string>
     <string name="cd_toggle_search">Toggle web search</string>
     <!-- Reasoning display. -->
     <string name="settings_section_reasoning">Reasoning</string>
@@ -142,6 +146,14 @@
     <!-- Voice input hints (inline, above the composer). -->
     <string name="voice_no_match_hint">Didn\u2019t catch that — try again.</string>
     <string name="voice_mic_rationale">Microphone permission is needed for voice input. You can keep typing instead.</string>
+    <string name="voice_listening_hint">Listening… Speak now or tap to cancel.</string>
+    <string name="voice_processing_hint">Processing speech…</string>
+    <string name="voice_error_hint">Voice input error — tap to try again.</string>
+    <string name="voice_unavailable_hint">Voice input is not available on this device.</string>
+    <string name="cd_voice_listening">Listening for voice, tap to cancel</string>
+    <string name="cd_voice_processing">Processing voice input</string>
+    <string name="cd_stop_speaking">Stop spoken playback</string>
+    <string name="cd_voice_error">Voice error, tap to retry</string>
     <string name="settings_appearance_system">System</string>
     <string name="settings_appearance_light">Light</string>
     <string name="settings_appearance_dark">Dark</string>

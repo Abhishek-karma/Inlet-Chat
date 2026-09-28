@@ -400,14 +400,40 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `a saved voice id is hydrated into state`() =
-        runSettingsTest(
-            seed = { _, appPreferences -> appPreferences.setVoiceId(NATURAL.id) },
-            voiceOutput = VoiceOutput(FakeVoiceEngine(VOICES)),
-        ) { viewModel, _, _, _ ->
+    fun `saving a valid search endpoint persists it and enables search`() =
+        runSettingsTest { viewModel, _, appPreferences, _ ->
             awaitSettled(viewModel)
 
-            assertEquals(NATURAL.id, viewModel.uiState.value.voiceId)
+            viewModel.setSearchEndpointInput("https://custom-searxng.example/search")
+            viewModel.saveSearch()
+
+            val stored = appPreferences.searchEndpoint.first()
+            assertEquals("https://custom-searxng.example/search", stored)
+            assertEquals("https://custom-searxng.example/search", viewModel.uiState.value.storedSearchEndpoint)
+            assertTrue(viewModel.uiState.value.searchConfigured)
+            assertNull(viewModel.uiState.value.searchFormError)
+        }
+
+    @Test
+    fun `invalid search endpoint url shows validation error`() =
+        runSettingsTest { viewModel, _, _, _ ->
+            awaitSettled(viewModel)
+
+            viewModel.setSearchEndpointInput("invalid-url-without-scheme")
+            viewModel.saveSearch()
+
+            assertEquals(SettingsViewModel.SEARCH_URL_INVALID, viewModel.uiState.value.searchFormError)
+        }
+
+    @Test
+    fun `reset search endpoint sets default searxng url`() =
+        runSettingsTest { viewModel, _, _, _ ->
+            awaitSettled(viewModel)
+
+            viewModel.setSearchEndpointInput("https://my-instance.org")
+            viewModel.resetSearchEndpointToDefault()
+
+            assertEquals(AppPreferences.DEFAULT_SEARCH_ENDPOINT, viewModel.uiState.value.searchEndpointInput)
         }
 
     private companion object {

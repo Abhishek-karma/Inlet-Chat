@@ -8,28 +8,35 @@ data class SearchResult(
     val title: String,
     val url: String,
     val snippet: String,
+    val engine: String? = null,
+)
+
+/** Extracted readable page text and title. */
+data class ExtractedContent(
+    val title: String,
+    val text: String,
 )
 
 sealed interface SearchOutcome {
     data class Success(val results: List<SearchResult>) : SearchOutcome
 
     /**
- * A search failure. [error] carries the user-facing message
- * ([SearchError.userMessage]); [detail] is optional diagnostics and is
- * deliberately not rendered in the UI.
+     * A search failure. [error] carries the user-facing message
+     * ([SearchError.userMessage]); [detail] is optional diagnostics and is
+     * deliberately not rendered in the UI.
      */
     data class Failure(val error: SearchError, val detail: String? = null) : SearchOutcome
 }
 
 enum class SearchError(val userMessage: String) {
-    InvalidCredentials("Invalid search API key"),
-    RateLimited("Rate limit reached. Try again shortly."),
-    NetworkUnavailable("Unable to connect. Check your network."),
-    Timeout("Request timed out."),
-    ServerError("Search service is unavailable."),
+    InvalidCredentials("Invalid search credentials or authorization."),
+    RateLimited("Search rate limit reached. Try again shortly."),
+    NetworkUnavailable("Unable to connect to search service."),
+    Timeout("Search request timed out."),
+    ServerError("Search service is temporarily unavailable."),
     InvalidResponse("Search service returned an invalid response."),
-    NoResults("No results found."),
-    Unknown("Something went wrong."),
+    NoResults("No relevant web results found."),
+    Unknown("Something went wrong with search."),
 }
 
 /** Serializes the sources persisted under an answer. */

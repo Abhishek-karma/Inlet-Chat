@@ -69,4 +69,52 @@ class AttachmentIngesterTest {
 
         assertEquals(AttachmentIngester.UNSUPPORTED_MESSAGE, (result as AttachmentIngester.IngestResult.Failure).message)
     }
+
+    @Test
+    fun attachmentManagerLimitsAndRemovalCleanup() {
+        val manager = com.assistant.app.data.attachments.AttachmentManager(ingester.attachmentsDir)
+        val img1 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "1.jpg") as AttachmentIngester.IngestResult.Success).attachment
+        val img2 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "2.jpg") as AttachmentIngester.IngestResult.Success).attachment
+        val img3 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "3.jpg") as AttachmentIngester.IngestResult.Success).attachment
+        val img4 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "4.jpg") as AttachmentIngester.IngestResult.Success).attachment
+        val img5 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "5.jpg") as AttachmentIngester.IngestResult.Success).attachment
+
+        val (staged4, err4) = manager.addPendingAttachments(emptyList(), listOf(img1, img2, img3, img4))
+        assertEquals(4, staged4.size)
+        org.junit.Assert.assertNull(err4)
+
+        val (staged5, err5) = manager.addPendingAttachments(staged4, listOf(img5))
+        assertEquals(4, staged5.size)
+        org.junit.Assert.assertNotNull(err5)
+
+        // Verify removing an attachment deletes its file on disk
+        assertTrue(java.io.File(img1.path).exists())
+        val afterRemove = manager.removePendingAttachment(staged4, img1.id)
+        assertEquals(3, afterRemove.size)
+        org.junit.Assert.assertFalse(java.io.File(img1.path).exists())
+
+        // Clean up remaining staged files
+        manager.discardStagedAttachments(afterRemove)
+        org.junit.Assert.assertFalse(java.io.File(img2.path).exists())
+        org.junit.Assert.assertFalse(java.io.File(img3.path).exists())
+        org.junit.Assert.assertFalse(java.io.File(img4.path).exists())
+        java.io.File(img5.path).delete()
+    }
+
+    @Test
+    fun sweepOrphansRemovesUnreferencedFiles() = kotlinx.coroutines.test.runTest {
+        val img1 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "keep.jpg") as AttachmentIngester.IngestResult.Success).attachment
+        val img2 = (ingester.storeImage(ByteArrayInputStream(jpeg1x1), "orphan.jpg") as AttachmentIngester.IngestResult.Success).attachment
+
+        assertTrue(java.io.File(img1.path).exists())
+        assertTrue(java.io.File(img2.path).exists())
+
+        ingester.sweepOrphans { setOf(img1.path) }
+
+        assertTrue(java.io.File(img1.path).exists())
+        org.junit.Assert.assertFalse(java.io.File(img2.path).exists())
+
+        java.io.File(img1.path).delete()
+    }
 }
+

@@ -96,6 +96,10 @@ class AppContainer(context: Context) {
         }
     }
 
+    val searchEndpointState: StateFlow<String> by lazy {
+        appPreferences.searchEndpoint.stateIn(appScope, SharingStarted.Eagerly, AppPreferences.DEFAULT_SEARCH_ENDPOINT)
+    }
+
     private val chatRepository: ChatRepository by lazy {
         ChatRepository(
             chatLlm = chatLlm,
@@ -105,8 +109,13 @@ class AppContainer(context: Context) {
             },
             attachmentsDir = attachmentIngester.attachmentsDir,
             webSearch = { query ->
+                val endpoint = searchEndpointState.value
                 val key = secureKeyStore.searchApiKey()
-                if (key == null) null else WebSearchClient(httpClient, key).search(query)
+                WebSearchClient(
+                    client = httpClient,
+                    endpoint = endpoint,
+                    apiKey = key,
+                ).search(query)
             },
         )
     }
@@ -119,7 +128,7 @@ class AppContainer(context: Context) {
         val voiceAutoPlayState = appPreferences.voiceAutoPlay.stateIn(appScope, SharingStarted.Eagerly, true)
         val voiceSpeedState = appPreferences.voiceSpeed.stateIn(appScope, SharingStarted.Eagerly, 1.0f)
         val voiceIdState = appPreferences.voiceId.stateIn(appScope, SharingStarted.Eagerly, null)
-        val searchConfiguredState = appPreferences.searchConfigured.stateIn(appScope, SharingStarted.Eagerly, false)
+        val searchConfiguredState = appPreferences.searchConfigured.stateIn(appScope, SharingStarted.Eagerly, true)
         val reasoningVisibleState = appPreferences.reasoningVisible.stateIn(appScope, SharingStarted.Eagerly, true)
 
         return ChatViewModel.Factory(
@@ -148,6 +157,9 @@ class AppContainer(context: Context) {
             secureKeyStore = secureKeyStore,
             newTestProvider = { baseUrl: String, model: String, apiKey: String ->
                 OpenAICompatibleProvider(httpClient, baseUrl, apiKey, model)
+            },
+            newTestSearch = { endpoint: String, apiKey: String? ->
+                com.assistant.app.llm.SearXNGSearchProvider(httpClient, endpoint, apiKey).search("test", 1)
             },
             ttsAvailable = voiceOutput.isAvailable,
             voiceOutput = voiceOutput,

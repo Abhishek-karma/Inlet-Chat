@@ -3,97 +3,95 @@ package com.assistant.app.llm
 import com.assistant.app.llm.model.SearchError
 import com.assistant.app.llm.model.SearchOutcome
 import com.assistant.app.llm.model.SearchResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONException
-import org.json.JSONObject
-import java.io.IOException
-import java.net.SocketTimeoutException
 
 /**
- * Web search for answer context, via the Brave Search API.
- *
- * One provider, one key, one endpoint. Every failure becomes a
- * [SearchOutcome.Failure] so the caller can answer without search rather than
- * fail the turn. The key is sent in a header and never logged or rendered.
+ * Unified web search client combining provider search, page fetching, and content extraction.
+ * Powered by open SearXNG metasearch with configurable endpoints and zero paid API keys required.
  */
 class WebSearchClient(
-    private val client: OkHttpClient,
-    private val apiKey: String,
-    /** Overridable so tests can point at a local server. */
-    private val endpoint: String = ENDPOINT,
+    private val provider: WebSearchProvider,
+    private val pageFetcher: PageFetcher,
+    private val contentExtractor: ContentExtractor,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val maxPagesToFetch: Int = DEFAULT_MAX_PAGES_TO_FETCH,
 ) {
-
-    suspend fun search(query: String, maxResults: Int = 5): SearchOutcome = withContext(dispatcher) {
-        if (apiKey.isBlank()) return@withContext SearchOutcome.Failure(SearchError.NoResults)
-
-        val url = endpoint.toHttpUrlOrNull()
-            ?.newBuilder()
-            ?.addQueryParameter("q", query)
-            ?.addQueryParameter("count", maxResults.toString())
-            ?.build()
-            ?: return@withContext SearchOutcome.Failure(SearchError.Unknown)
-
-        val request = Request.Builder()
-            .url(url)
-            .header("Accept", "application/json")
-            .header("X-Subscription-Token", apiKey)
-            .build()
-
-        try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext statusFailure(response.code)
-                val body = response.body?.string()
-                    ?: return@withContext SearchOutcome.Failure(SearchError.InvalidResponse)
-                parseResults(body, maxResults)
-            }
-        } catch (e: IOException) {
-            SearchOutcome.Failure(
-                if (e is SocketTimeoutException) SearchError.Timeout else SearchError.NetworkUnavailable,
-            )
-        }
-    }
-
-    private fun statusFailure(code: Int): SearchOutcome.Failure = SearchOutcome.Failure(
-        when {
-            code == 401 || code == 403 -> SearchError.InvalidCredentials
-            code == 429 -> SearchError.RateLimited
-            code >= 500 -> SearchError.ServerError
-            else -> SearchError.Unknown
-        },
+    /**
+     * Primary convenience constructor for standard OkHttp client and SearXNG endpoint.
+     */
+    constructor(
+        client: OkHttpClient,
+        endpoint: String = SearXNGSearchProvider.DEFAULT_ENDPOINT,
+        apiKey: String? = null,
+        dispatcher: CoroutineDispatcher = Dispatchers.IO,
+        maxPagesToFetch: Int = DEFAULT_MAX_PAGES_TO_FETCH,
+    ) : this(
+        provider = SearXNGSearchProvider(client, endpoint, apiKey, dispatcher),
+        pageFetcher = HttpPageFetcher(client, dispatcher),
+        contentExtractor = JsoupContentExtractor(),
+        dispatcher = dispatcher,
+        maxPagesToFetch = maxPagesToFetch,
     )
 
-    private fun parseResults(body: String, maxResults: Int): SearchOutcome = try {
-        val results = buildList {
-            val array = JSONObject(body).optJSONObject("web")?.optJSONArray("results")
-            if (array != null) {
-                for (i in 0 until array.length()) {
-                    val entry = array.optJSONObject(i) ?: continue
-                    val url = entry.optString("url")
-                    if (url.isEmpty()) continue
-                    add(
-                        SearchResult(
-                            title = entry.optString("title"),
-                            url = url,
-                            snippet = entry.optString("description"),
-                        ),
-                    )
-                }
-            }
-        }.take(maxResults)
+    suspend fun search(query: String, maxResults: Int = 5): SearchOutcome = withContext(dispatcher) {
+        val searchOutcome = try {
+            provider.search(query, maxResults)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            SearchOutcome.Failure(SearchError.Unknown)
+        }
 
-        if (results.isEmpty()) SearchOutcome.Failure(SearchError.NoResults)
-        else SearchOutcome.Success(results)
-    } catch (_: JSONException) {
-        SearchOutcome.Failure(SearchError.InvalidResponse)
+        if (searchOutcome !is SearchOutcome.Success) {
+            return@withContext searchOutcome
+        }
+
+        val results = searchOutcome.results
+        if (results.isEmpty()) {
+            return@withContext SearchOutcome.Failure(SearchError.NoResults)
+        }
+
+        // Fetch top pages to enrich snippets with clean readable article text
+        val enrichedResults = results.mapIndexed { index, result ->
+            if (index < maxPagesToFetch && (result.url.startsWith("https://") || result.url.startsWith("http://"))) {
+                try {
+                    val html = pageFetcher.fetch(result.url)
+                    if (!html.isNullOrBlank()) {
+                        val extracted = contentExtractor.extract(html, result.url)
+                        if (extracted.text.isNotBlank() && extracted.text.length >= 40) {
+                            val title = if (result.title.isBlank() || result.title == result.url) {
+                                extracted.title.ifBlank { result.title }
+                            } else {
+                                result.title
+                            }
+                            result.copy(
+                                title = title,
+                                snippet = extracted.text,
+                            )
+                        } else {
+                            result
+                        }
+                    } else {
+                        result
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    result
+                }
+            } else {
+                result
+            }
+        }
+
+        SearchOutcome.Success(enrichedResults)
     }
 
-    private companion object {
-        const val ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+    companion object {
+        const val DEFAULT_MAX_PAGES_TO_FETCH = 2
     }
 }

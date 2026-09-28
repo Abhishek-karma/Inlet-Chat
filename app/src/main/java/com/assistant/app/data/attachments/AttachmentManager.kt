@@ -43,14 +43,17 @@ class AttachmentManager(
     }
 
     fun deleteFile(path: String) {
-        if (attachmentsDir != null) {
+        if (path.isNotBlank()) {
             runCatching { File(path).delete() }
         }
     }
 
     fun deleteFiles(paths: List<String>) {
-        if (attachmentsDir == null) return
-        paths.forEach { path -> runCatching { File(path).delete() } }
+        paths.forEach { path ->
+            if (path.isNotBlank()) {
+                runCatching { File(path).delete() }
+            }
+        }
     }
 
     fun toEntity(attachment: UiAttachment, messageId: String, conversationId: String, createdAt: Long) =

@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
+import com.assistant.app.data.VoiceStatus
 import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
@@ -118,6 +119,7 @@ fun Composer(
     modifier: Modifier = Modifier,
     onMicClick: (() -> Unit)? = null,
     voiceActive: Boolean = false,
+    voiceStatus: VoiceStatus = VoiceStatus.Idle,
     onAttachClick: (() -> Unit)? = null,
     searchActive: Boolean = false,
     onToggleSearch: (() -> Unit)? = null,
@@ -156,10 +158,17 @@ fun Composer(
                     .fillMaxWidth()
                     .testTag(ComposerInputTag),
                 placeholder = {
-                    Text(
-                        stringResource(
+                    val placeholderText = when (voiceStatus) {
+                        VoiceStatus.Listening -> stringResource(R.string.voice_listening_hint)
+                        VoiceStatus.Processing -> stringResource(R.string.voice_processing_hint)
+                        VoiceStatus.Speaking -> stringResource(R.string.voice_speaking_hint)
+                        VoiceStatus.Error -> stringResource(R.string.voice_error_hint)
+                        VoiceStatus.Idle -> stringResource(
                             if (voiceActive) R.string.composer_listening else R.string.composer_hint,
-                        ),
+                        )
+                    }
+                    Text(
+                        text = placeholderText,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
@@ -197,7 +206,7 @@ fun Composer(
                                 haptics(HapticFeedbackType.TextHandleMove)
                                 onAttachClick.invoke()
                             },
-                            modifier = Modifier.size(44.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(
                                 painter = painterResource(AppIcons.Add),
@@ -257,27 +266,51 @@ fun Composer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
                 ) {
-                    if (onMicClick != null && !isGenerating && value.isBlank()) {
+                    val showMic = onMicClick != null &&
+                        (!isGenerating || voiceStatus == VoiceStatus.Speaking) &&
+                        (value.isBlank() || voiceStatus == VoiceStatus.Speaking || voiceStatus == VoiceStatus.Listening)
+                    if (showMic) {
+                        val micBg = when (voiceStatus) {
+                            VoiceStatus.Listening -> MaterialTheme.colorScheme.primaryContainer
+                            VoiceStatus.Processing -> MaterialTheme.colorScheme.tertiaryContainer
+                            VoiceStatus.Speaking -> MaterialTheme.colorScheme.secondaryContainer
+                            VoiceStatus.Error -> MaterialTheme.colorScheme.errorContainer
+                            VoiceStatus.Idle -> if (voiceActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                        }
+                        val micTint = when (voiceStatus) {
+                            VoiceStatus.Listening -> MaterialTheme.colorScheme.primary
+                            VoiceStatus.Processing -> MaterialTheme.colorScheme.tertiary
+                            VoiceStatus.Speaking -> MaterialTheme.colorScheme.secondary
+                            VoiceStatus.Error -> MaterialTheme.colorScheme.error
+                            VoiceStatus.Idle -> if (voiceActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        val micCd = when (voiceStatus) {
+                            VoiceStatus.Listening -> stringResource(R.string.cd_voice_listening)
+                            VoiceStatus.Processing -> stringResource(R.string.cd_voice_processing)
+                            VoiceStatus.Speaking -> stringResource(R.string.cd_stop_speaking)
+                            VoiceStatus.Error -> stringResource(R.string.cd_voice_error)
+                            VoiceStatus.Idle -> stringResource(R.string.cd_use_microphone)
+                        }
+                        val micIcon = when (voiceStatus) {
+                            VoiceStatus.Speaking -> AppIcons.SpeakerOn
+                            VoiceStatus.Error -> AppIcons.Refresh
+                            else -> AppIcons.Mic
+                        }
+
                         IconButton(
                             onClick = {
                                 haptics(HapticFeedbackType.TextHandleMove)
                                 onMicClick()
                             },
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (voiceActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                ),
+                                .background(micBg),
                         ) {
                             Icon(
-                                painter = painterResource(AppIcons.Mic),
-                                contentDescription = stringResource(R.string.cd_use_microphone),
-                                tint = if (voiceActive) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                painter = painterResource(micIcon),
+                                contentDescription = micCd,
+                                tint = micTint,
                                 modifier = Modifier.size(22.dp),
                             )
                         }
@@ -329,7 +362,7 @@ private fun SendButton(
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
         ),
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .semantics { contentDescription = actionLabel }
             .graphicsLayer { scaleX = scale; scaleY = scale },
     ) {

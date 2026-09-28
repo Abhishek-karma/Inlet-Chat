@@ -386,6 +386,17 @@ private fun SearchPage(state: SettingsUiState, viewModel: SettingsViewModel) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     OutlinedTextField(
+        value = state.searchEndpointInput,
+        onValueChange = viewModel::setSearchEndpointInput,
+        label = { Text(stringResource(R.string.settings_search_endpoint)) },
+        placeholder = { Text(state.storedSearchEndpoint) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        shape = AppShape.small,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !state.isSearchSaving && !state.isSearchTesting,
+    )
+    OutlinedTextField(
         value = state.searchApiKeyInput,
         onValueChange = viewModel::setSearchApiKeyInput,
         label = { Text(stringResource(R.string.settings_search_api_key)) },
@@ -399,7 +410,7 @@ private fun SearchPage(state: SettingsUiState, viewModel: SettingsViewModel) {
         },
         shape = AppShape.small,
         modifier = Modifier.fillMaxWidth(),
-        enabled = !state.isSearchSaving,
+        enabled = !state.isSearchSaving && !state.isSearchTesting,
     )
     state.searchFormError?.let { error ->
         Text(
@@ -408,18 +419,88 @@ private fun SearchPage(state: SettingsUiState, viewModel: SettingsViewModel) {
             color = MaterialTheme.colorScheme.error,
         )
     }
-    Button(
-        onClick = viewModel::saveSearch,
-        enabled = state.isLoaded && !state.isSearchSaving,
+
+    OutlinedButton(
+        onClick = viewModel::testSearch,
+        enabled = state.isLoaded && !state.isSearchTesting && !state.isSearchSaving,
         shape = AppShape.pill,
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
         modifier = Modifier.fillMaxWidth(),
     ) {
+        if (state.isSearchTesting) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(18.dp)
+                    .padding(end = AppSpacing.sm),
+                strokeWidth = 2.dp,
+            )
+        }
         Text(
             stringResource(
-                if (state.isSearchSaving) R.string.settings_saving else R.string.settings_save,
+                if (state.isSearchTesting) {
+                    R.string.settings_search_testing
+                } else {
+                    R.string.settings_search_test
+                },
             ),
         )
+    }
+
+    state.searchTestOutcome?.let { outcome ->
+        val color = when (outcome) {
+            is ConnectionOutcome.Success -> MaterialTheme.colorScheme.primary
+            is ConnectionOutcome.Failure -> MaterialTheme.colorScheme.error
+        }
+        val text = when (outcome) {
+            is ConnectionOutcome.Success -> stringResource(R.string.settings_connection_success)
+            is ConnectionOutcome.Failure -> outcome.message
+        }
+        Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = color,
+            )
+            if (outcome is ConnectionOutcome.Failure && outcome.detail != null) {
+                Text(
+                    text = outcome.detail,
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = AppCodeFontFamily),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f),
+                            shape = AppShape.small,
+                        )
+                        .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
+                )
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            onClick = viewModel::resetSearchEndpointToDefault,
+            enabled = !state.isSearchSaving,
+        ) {
+            Text(stringResource(R.string.settings_search_reset_default))
+        }
+
+        Button(
+            onClick = viewModel::saveSearch,
+            enabled = state.isLoaded && !state.isSearchSaving && !state.isSearchTesting,
+            shape = AppShape.pill,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        ) {
+            Text(
+                stringResource(
+                    if (state.isSearchSaving) R.string.settings_saving else R.string.settings_save,
+                ),
+            )
+        }
     }
 }
 

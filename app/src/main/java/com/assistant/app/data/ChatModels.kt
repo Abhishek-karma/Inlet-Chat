@@ -14,9 +14,20 @@ sealed interface ChatStatus {
 }
 
 /**
- * Voice state layered cleanly on the text pipeline.
+ * Voice state layered cleanly on the text pipeline:
+ * Idle -> Listening -> Processing -> Speaking -> Error.
  */
-enum class VoiceStatus { Idle, Listening, Transcribing, Speaking }
+enum class VoiceStatus {
+    Idle,
+    Listening,
+    Processing,
+    Speaking,
+    Error;
+
+    companion object {
+        val Transcribing: VoiceStatus get() = Processing
+    }
+}
 
 /**
  * Complete UI state observed by the chat screen.
