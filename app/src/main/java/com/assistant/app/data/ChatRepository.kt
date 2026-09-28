@@ -168,9 +168,8 @@ class ChatRepository(
     suspend fun send(text: String) {
         val content = text.trim()
         if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) || generationController.isGenerating) return
+        cleanupFailedAssistantMessage()
         val job = currentCoroutineContext().job
-        generationController.attachJob(job)
-        _uiState.update { it.copy(status = ChatStatus.Generating) }
         try {
             sendPrepared(text, content, job)
         } catch (e: CancellationException) {
@@ -191,7 +190,6 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
-        failedAssistantId = null
         val isNewConversation = _uiState.value.conversationId == null
         val conversationId = _uiState.value.conversationId ?: newId()
         val attachments = _uiState.value.pendingAttachments
@@ -233,7 +231,7 @@ class ChatRepository(
             }
         }
         clearPendingAttachments()
-        startGeneration(llm, assistantId)
+        startGeneration(llm, assistantId, job)
     }
 
     suspend fun retry() {
@@ -242,22 +240,9 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
-        val failedId = failedAssistantId
-        failedAssistantId = null
-        generationController.attachJob(currentCoroutineContext().job)
-        if (failedId != null) {
-            _uiState.update { state ->
-                state.copy(messages = state.messages.filterNot { it.id == failedId })
-            }
-            versionStore.remove(failedId)
-            store?.let { s ->
-                _uiState.value.conversationId?.let { conversationId ->
-                    attachmentManager.deleteFiles(s.deleteMessagesFrom(failedId, conversationId))
-                }
-            }
-        }
+        cleanupFailedAssistantMessage()
         if (_uiState.value.messages.none { it.role == Role.USER }) return
-        appendAssistantPlaceholderAndGenerate()
+        appendAssistantPlaceholderAndGenerate(currentCoroutineContext().job)
     }
 
     fun dismissError() {
@@ -274,7 +259,7 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
-        generationController.attachJob(currentCoroutineContext().job)
+        val job = currentCoroutineContext().job
         versionStore.snapshotVersion(last.id, state.messages) { transform ->
             _uiState.update { s -> s.copy(messages = transform(s.messages)) }
         }
@@ -284,7 +269,7 @@ class ChatRepository(
             })
         }
         store?.let { s -> state.conversationId?.let { s.updateMessageContent(last.id, "", "", now()) } }
-        startGeneration(llm, last.id)
+        startGeneration(llm, last.id, job)
     }
 
     suspend fun switchVersion(messageId: String, index: Int) {
@@ -314,11 +299,11 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
-        generationController.attachJob(currentCoroutineContext().job)
+        val job = currentCoroutineContext().job
         val current = _uiState.value
         val index = current.messages.indexOfFirst { it.id == messageId && it.role == Role.USER }
         if (index < 0) return
-        failedAssistantId = null
+        cleanupFailedAssistantMessage()
         val edited = current.messages[index].copy(content = content)
         _uiState.update { it.copy(messages = it.messages.take(index) + edited, draft = "") }
         current.messages.drop(index + 1).forEach { versionStore.remove(it.id) }
@@ -330,7 +315,7 @@ class ChatRepository(
                 s.updateMessageContent(edited.id, content, "", now())
             }
         }
-        appendAssistantPlaceholderAndGenerate()
+        appendAssistantPlaceholderAndGenerate(job)
     }
 
     fun newConversation() {
@@ -446,44 +431,72 @@ class ChatRepository(
     private suspend fun startGeneration(
         llm: ChatLlmState.Ready,
         assistantId: String,
+        job: Job,
     ) {
+        val targetConversationId = _uiState.value.conversationId ?: return
+        val session = generationController.tryStartSession(targetConversationId, assistantId, job)
+            ?: return
+
         val (requestMessages, images) = requestFor(assistantId)
         val question = _uiState.value.messages
             .dropLast(1)
             .lastOrNull { it.role == Role.USER }
             ?.content
             .orEmpty()
+
         _uiState.update { it.copy(status = ChatStatus.Generating) }
 
         generationController.runStream(
+            session = session,
             provider = llm.provider,
             request = ChatRequest(model = llm.model, messages = requestMessages, images = images),
-            onDelta = { appendDelta(assistantId, it) },
-            onReasoning = { appendReasoning(assistantId, it) },
-            onPersist = { persistAssistantContent(assistantId) },
-            onCancelled = {
-                versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
-                    _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+            onDelta = { delta ->
+                if (_uiState.value.conversationId == targetConversationId) {
+                    appendDelta(assistantId, delta)
                 }
-                _uiState.update { state ->
-                    if (state.status is ChatStatus.Generating) state.copy(status = ChatStatus.Idle) else state
+            },
+            onReasoning = { reasoning ->
+                if (_uiState.value.conversationId == targetConversationId) {
+                    appendReasoning(assistantId, reasoning)
+                }
+            },
+            onPersist = {
+                persistAssistantContent(assistantId, targetConversationId)
+            },
+            onCancelled = {
+                persistAssistantContent(assistantId, targetConversationId)
+                if (_uiState.value.conversationId == targetConversationId) {
+                    versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
+                        _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+                    }
+                    _uiState.update { state ->
+                        if (state.status is ChatStatus.Generating) state.copy(status = ChatStatus.Idle) else state
+                    }
                 }
             },
             onFailure = { failure ->
-                failGeneration(assistantId, failure)
+                failGeneration(assistantId, targetConversationId, failure)
             },
             onSuccess = {
                 failedAssistantId = null
-                versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
-                    _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+                persistAssistantContent(assistantId, targetConversationId)
+                if (_uiState.value.conversationId == targetConversationId) {
+                    versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
+                        _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+                    }
+                    _uiState.update { it.copy(status = ChatStatus.Idle) }
                 }
-                _uiState.update { it.copy(status = ChatStatus.Idle) }
-                fetchFollowUps(llm, assistantId, question)
+                fetchFollowUps(llm, assistantId, question, targetConversationId)
             }
         )
     }
 
-    private suspend fun fetchFollowUps(llm: ChatLlmState.Ready, assistantId: String, question: String) {
+    private suspend fun fetchFollowUps(
+        llm: ChatLlmState.Ready,
+        assistantId: String,
+        question: String,
+        targetConversationId: String,
+    ) {
         val suggester = followUpSuggestions ?: return
         val answer = _uiState.value.messages.firstOrNull { it.id == assistantId }?.content.orEmpty()
         if (question.isBlank() || !FollowUpSuggestions.isWorthSuggesting(answer)) return
@@ -499,16 +512,17 @@ class ChatRepository(
             return
         }
         if (suggestions.isEmpty()) return
-        _uiState.update { s ->
-            s.copy(messages = s.messages.map { m ->
-                if (m.id == assistantId) m.copy(followUps = suggestions) else m
-            })
+        if (_uiState.value.conversationId == targetConversationId) {
+            _uiState.update { s ->
+                s.copy(messages = s.messages.map { m ->
+                    if (m.id == assistantId) m.copy(followUps = suggestions) else m
+                })
+            }
         }
-        if (_uiState.value.messages.none { it.id == assistantId }) return
         store?.updateFollowUps(assistantId, suggestions.joinToString("\n            "))
     }
 
-    private suspend fun appendAssistantPlaceholderAndGenerate() {
+    private suspend fun appendAssistantPlaceholderAndGenerate(job: Job) {
         val llm = currentLlm() ?: run {
             refuseWithoutLlm()
             return
@@ -522,7 +536,7 @@ class ChatRepository(
                 s.appendMessage(UiMessage(assistantId, Role.ASSISTANT, "", now()).toEntity(it))
             }
         }
-        startGeneration(llm, assistantId)
+        startGeneration(llm, assistantId, job)
     }
 
     private fun appendDelta(assistantId: String, text: String) {
@@ -545,30 +559,50 @@ class ChatRepository(
         }
     }
 
-    private suspend fun persistAssistantContent(assistantId: String) {
+    private suspend fun persistAssistantContent(assistantId: String, targetConversationId: String? = null) {
         val s = store ?: return
-        val state = _uiState.value
-        val conversationId = state.conversationId ?: return
-        val message = state.messages.firstOrNull { it.id == assistantId } ?: return
-        s.updateMessageContent(assistantId, message.content, message.reasoning, now())
+        val conversationId = targetConversationId ?: _uiState.value.conversationId ?: return
+        val message = _uiState.value.messages.firstOrNull { it.id == assistantId }
+        if (message != null) {
+            s.updateMessageContent(assistantId, message.content, message.reasoning, now())
+        }
     }
 
-    private suspend fun failGeneration(assistantId: String, failure: ChatChunk.Failure) {
-        var kept = false
+    private suspend fun cleanupFailedAssistantMessage() {
+        val failedId = failedAssistantId ?: return
+        failedAssistantId = null
         _uiState.update { state ->
-            val hasContent = state.messages.any { it.id == assistantId && it.content.isNotEmpty() }
-            kept = hasContent
-            state.copy(
-                messages = if (hasContent) state.messages else state.messages.filterNot { it.id == assistantId },
-                status = ChatStatus.Error(failure.error.userMessage),
-            )
+            state.copy(messages = state.messages.filterNot { it.id == failedId })
         }
-        val conversationId = _uiState.value.conversationId
-        if (store != null && conversationId != null) {
+        versionStore.remove(failedId)
+        store?.let { s ->
+            _uiState.value.conversationId?.let { conversationId ->
+                attachmentManager.deleteFiles(s.deleteMessagesFrom(failedId, conversationId))
+            }
+        }
+    }
+
+    private suspend fun failGeneration(
+        assistantId: String,
+        targetConversationId: String,
+        failure: ChatChunk.Failure
+    ) {
+        var kept = false
+        if (_uiState.value.conversationId == targetConversationId) {
+            _uiState.update { state ->
+                val hasContent = state.messages.any { it.id == assistantId && it.content.isNotEmpty() }
+                kept = hasContent
+                state.copy(
+                    messages = if (hasContent) state.messages else state.messages.filterNot { it.id == assistantId },
+                    status = ChatStatus.Error(failure.error.userMessage),
+                )
+            }
+        }
+        if (store != null) {
             if (kept) {
-                persistAssistantContent(assistantId)
+                persistAssistantContent(assistantId, targetConversationId)
             } else {
-                attachmentManager.deleteFiles(store.deleteMessagesFrom(assistantId, conversationId))
+                attachmentManager.deleteFiles(store.deleteMessagesFrom(assistantId, targetConversationId))
             }
         }
         failedAssistantId = if (kept) assistantId else null
@@ -576,7 +610,9 @@ class ChatRepository(
 
     private suspend fun requestFor(assistantId: String): Pair<List<Pair<Role, String>>, List<String>> =
         withContext(generationDispatcher) {
-            val messages = _uiState.value.messages.takeWhile { it.id != assistantId }
+            val messages = _uiState.value.messages
+                .takeWhile { it.id != assistantId }
+                .filterNot { it.id == failedAssistantId } // Exclude failed partial assistant responses from LLM context
             val lastUserId = messages.lastOrNull { it.role == Role.USER }?.id
             var images: List<String> = emptyList()
             val mapped = messages.map { message ->
