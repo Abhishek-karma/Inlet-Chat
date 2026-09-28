@@ -16,50 +16,31 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,16 +52,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -92,22 +68,19 @@ import com.assistant.app.data.ChatLlmState
 import com.assistant.app.data.ChatStatus
 import com.assistant.app.data.VoiceStatus
 import com.assistant.app.llm.model.Role
-import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.components.AssistantTopBar
 import com.assistant.app.ui.components.AttachmentSheet
 import com.assistant.app.ui.components.Composer
 import com.assistant.app.ui.components.ComposerAttachAction
 import com.assistant.app.ui.components.MessageList
-import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
-import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 import com.assistant.app.ui.theme.appTween
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Nara Chat Screen: Main conversation canvas, model switching, and writing flow.
+ * Primary chat canvas composing model top bar, message list, empty states, and composer.
  */
 @Composable
 fun ChatScreen(
@@ -494,362 +467,6 @@ fun ChatScreen(
 
             if (!showSetupPrompt) {
                 composer()
-            }
-        }
-    }
-}
-
-private fun Modifier.readingColumn(): Modifier =
-    fillMaxWidth()
-        .wrapContentWidth(Alignment.CenterHorizontally)
-        .widthIn(max = AppDimens.maxContentWidth)
-
-@Composable
-private fun InlineHint(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .readingColumn()
-            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xs),
-    )
-}
-
-/**
- * Nara Empty State: Calm, inspiring editorial prompt canvas.
- */
-@Composable
-private fun EmptyHome(
-    onPromptSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val greeting = remember {
-        timeOfDayGreeting(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
-    }
-
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = AppSpacing.lg),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            // Radiant Inlet brand mark
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_inlet_logo),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp),
-                )
-            }
-
-            Spacer(Modifier.height(AppSpacing.lg))
-
-            Text(
-                text = stringResource(
-                    when (greeting) {
-                        Greeting.MORNING -> R.string.greeting_morning
-                        Greeting.AFTERNOON -> R.string.greeting_afternoon
-                        Greeting.EVENING -> R.string.greeting_evening
-                    },
-                ),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(AppSpacing.xs))
-            Text(
-                text = stringResource(R.string.chat_empty_statement),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(AppSpacing.xxl))
-
-            val examples: List<Pair<ImageVector, String>> = listOf(
-                Icons.Filled.Search to stringResource(R.string.chat_prompt_1),
-                Icons.Filled.Edit to stringResource(R.string.chat_prompt_2),
-                Icons.Filled.Star to stringResource(R.string.chat_prompt_3),
-            )
-            examples.forEachIndexed { index, (icon, prompt) ->
-                if (index > 0) Spacer(Modifier.height(AppSpacing.sm))
-                Surface(
-                    onClick = { onPromptSelected(prompt) },
-                    shape = AppShape.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 360.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = AppSpacing.lg, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                        Text(
-                            text = prompt,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(start = 14.dp),
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(AppSpacing.md))
-    }
-}
-
-@Composable
-private fun SuggestionsRow(
-    suggestions: List<String>,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyRow(
-        modifier = modifier
-            .readingColumn()
-            .padding(bottom = AppSpacing.xs),
-        contentPadding = PaddingValues(horizontal = AppSpacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-    ) {
-        items(suggestions) { suggestion ->
-            Surface(
-                onClick = { onSelect(suggestion) },
-                shape = AppShape.pill,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            ) {
-                Text(
-                    text = suggestion,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 6.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Shown instead of the conversation while no provider is configured. */
-@Composable
-private fun SetupRequired(
-    onOpenSettings: () -> Unit,
-    onOpenProviderSetup: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(AppSpacing.xxl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(AppIcons.Sparkle),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        Spacer(Modifier.height(AppSpacing.lg))
-        Text(
-            text = stringResource(R.string.chat_setup_required),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(AppSpacing.lg))
-        if (onOpenProviderSetup != null) {
-            Button(
-                onClick = onOpenProviderSetup,
-                shape = AppShape.pill,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            ) {
-                Text(stringResource(R.string.settings_add_provider))
-            }
-        } else {
-            Button(
-                onClick = onOpenSettings,
-                shape = AppShape.pill,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            ) {
-                Text(stringResource(R.string.chat_open_settings))
-            }
-        }
-    }
-}
-
-/** Error banner with clear recovery affordance */
-@Composable
-private fun ErrorBanner(
-    message: String,
-    onRetry: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .readingColumn()
-            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xs),
-        shape = AppShape.medium,
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppSpacing.md),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(AppIcons.Error),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = AppSpacing.md),
-            ) {
-                Text(
-                    text = stringResource(R.string.error_title),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-                Surface(
-                    onClick = onRetry,
-                    shape = AppShape.pill,
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
-                    modifier = Modifier.padding(top = AppSpacing.sm),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            painter = painterResource(AppIcons.Refresh),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.error_retry),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(start = AppSpacing.xs),
-                        )
-                    }
-                }
-            }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.size(36.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.cd_dismiss),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditBanner(
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .readingColumn()
-            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xs),
-        shape = AppShape.small,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(AppIcons.Edit),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = stringResource(R.string.edit_banner_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = AppSpacing.sm),
-            )
-            IconButton(
-                onClick = onCancel,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.cd_cancel_edit),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
             }
         }
     }
