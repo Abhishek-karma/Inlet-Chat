@@ -1,15 +1,16 @@
 package com.assistant.app.data
 
 import android.util.Base64
-import com.assistant.app.data.local.AttachmentEntity
+import com.assistant.app.data.attachments.AttachmentManager
+import com.assistant.app.data.generation.GenerationController
 import com.assistant.app.data.local.ConversationEntity
 import com.assistant.app.data.local.MessageEntity
+import com.assistant.app.data.search.SearchController
+import com.assistant.app.data.versions.AnswerVersionStore
 import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.model.ChatChunk
 import com.assistant.app.llm.model.ChatRequest
-import com.assistant.app.llm.model.ProviderError
 import com.assistant.app.llm.model.Role
-import com.assistant.app.llm.model.SearchError
 import com.assistant.app.llm.model.SearchOutcome
 import com.assistant.app.llm.model.SearchResult
 import com.assistant.app.llm.model.UiAttachment
@@ -20,7 +21,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -37,12 +37,8 @@ import java.io.File
 import java.util.UUID
 
 /**
- * Owns the conversation: the message list, the in-flight generation job, and
- * every call into the configured [LlmProvider].
- *
- * Mutating intents are `suspend` so clearing the ViewModel cancels a stream.
- * A failed generation keeps any partial answer as a normal message; [retry]
- * removes it and re-requests.
+ * High-level orchestrator for chat operations: session state, draft management,
+ * generation streaming, persistence, web search, answer versions, and attachments.
  */
 class ChatRepository(
     private val chatLlm: StateFlow<ChatLlmState>,
@@ -51,20 +47,18 @@ class ChatRepository(
     private val followUpSuggestions: (suspend (LlmProvider, String, String, String) -> List<String>)? = null,
     private val clock: () -> Long = System::currentTimeMillis,
     internal val attachmentsDir: File? = null,
-    private val webSearch: (suspend (String) -> SearchOutcome?)? = null,
+    webSearch: (suspend (String) -> SearchOutcome?)? = null,
 ) {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private var generationJob: Job? = null
+    private val attachmentManager = AttachmentManager(attachmentsDir)
+    private val searchController = SearchController(webSearch)
+    private val versionStore = AnswerVersionStore(store, clock)
+    private val generationController = GenerationController(generationDispatcher, clock)
 
     /** The failed generation's message id while it is still shown with an error. */
     private var failedAssistantId: String? = null
-
-    private var lastPersistAt: Long = 0L
-
-    /** Working copy of the loaded conversation's answer versions, keyed by message id. */
-    private val versionCache = AnswerVersions()
 
     /** Conversation snapshots for the no-persistence (test) mode. */
     private val conversationSnapshots = LinkedHashMap<String, List<UiMessage>>()
@@ -76,10 +70,6 @@ class ChatRepository(
         _uiState.update { it.copy(draft = text) }
     }
 
-    /**
-     * Reflects provider availability into the UI state. [ChatLlmState.Loading]
-     * never reaches here, so the first screen does not flash the setup prompt.
-     */
     fun setNeedsSetup(needsSetup: Boolean) {
         _uiState.update { it.copy(needsSetup = needsSetup) }
     }
@@ -92,7 +82,6 @@ class ChatRepository(
         _uiState.update { it.copy(voiceHint = show) }
     }
 
-    /** Appends a recognized transcript to the draft; never auto-sends. */
     fun applyVoiceTranscript(text: String) {
         val transcript = text.trim()
         if (transcript.isEmpty()) return
@@ -106,44 +95,25 @@ class ChatRepository(
         }
     }
 
-    /**
-     * Stages ingested attachments. Over-limit images or text files set
-     * [ChatUiState.attachmentError] and stage nothing.
-     */
     fun addPendingAttachments(attachments: List<UiAttachment>) {
         if (attachments.isEmpty()) return
         _uiState.update { state ->
-            val images = state.pendingAttachments.count { it.kind == UiAttachment.Kind.IMAGE } +
-                attachments.count { it.kind == UiAttachment.Kind.IMAGE }
-            val texts = state.pendingAttachments.count { it.kind == UiAttachment.Kind.TEXT } +
-                attachments.count { it.kind == UiAttachment.Kind.TEXT }
-            when {
-                images > MAX_IMAGES_PER_MESSAGE -> state.copy(attachmentError = "Up to $MAX_IMAGES_PER_MESSAGE images per message.")
-                texts > MAX_TEXTS_PER_MESSAGE -> state.copy(attachmentError = "Up to $MAX_TEXTS_PER_MESSAGE text files per message.")
-                else -> state.copy(
-                    pendingAttachments = state.pendingAttachments + attachments,
-                    attachmentError = null,
-                )
-            }
+            val (updated, error) = attachmentManager.addPendingAttachments(state.pendingAttachments, attachments)
+            state.copy(pendingAttachments = updated, attachmentError = error)
         }
     }
 
-    /** Removes one staged attachment and deletes its stored copy. */
     fun removePendingAttachment(id: String) {
-        var removedPath: String? = null
         _uiState.update { state ->
-            val removed = state.pendingAttachments.firstOrNull { it.id == id } ?: return@update state
-            removedPath = removed.path
-            state.copy(pendingAttachments = state.pendingAttachments.filterNot { it.id == id })
+            val updated = attachmentManager.removePendingAttachment(state.pendingAttachments, id)
+            state.copy(pendingAttachments = updated)
         }
-        removedPath?.let(::deleteFile)
     }
 
     fun clearAttachmentError() {
         _uiState.update { it.copy(attachmentError = null) }
     }
 
-    /** Shows a one-shot attachment error (ingest failure) above the composer. */
     fun setAttachmentError(message: String) {
         _uiState.update { it.copy(attachmentError = message) }
     }
@@ -152,18 +122,13 @@ class ChatRepository(
         _uiState.update { it.copy(pendingAttachments = emptyList()) }
     }
 
-    /**
-     * Drops staged attachments and their stored copies: they belong to the
-     * conversation being left and must never be sent into another one.
-     */
     private fun discardStagedAttachments() {
         val staged = _uiState.value.pendingAttachments
         if (staged.isEmpty()) return
         _uiState.update { it.copy(pendingAttachments = emptyList(), attachmentError = null) }
-        staged.forEach { deleteFile(it.path) }
+        attachmentManager.discardStagedAttachments(staged)
     }
 
-    /** The plain-text transcript of one saved conversation, or null. */
     suspend fun shareConversationText(id: String): String? {
         val s = store ?: return null
         val title = s.conversationTitle(id) ?: return null
@@ -173,10 +138,6 @@ class ChatRepository(
         return buildShareText(title, messages)
     }
 
-    /**
-     * Toggles web search and persists it. Before the first send there is no
-     * conversation row yet, so the state alone carries the toggle.
-     */
     suspend fun setSearchEnabled(enabled: Boolean) {
         _uiState.update { it.copy(searchEnabled = enabled, searchNotice = null) }
         store?.let { s ->
@@ -184,72 +145,37 @@ class ChatRepository(
         }
     }
 
-    private fun setSearchNotice(message: String) {
+    private fun setSearchNotice(message: String?) {
         _uiState.update { it.copy(searchNotice = message) }
     }
 
-    /** Clears the search notice (e.g. when the user edits the draft). */
     fun dismissSearchNotice() {
         _uiState.update { it.copy(searchNotice = null) }
     }
 
-    /**
-     * One search request for the user's message. A failure or empty result
-     * leaves the answer to proceed without search, with a visible notice.
-     */
     private suspend fun runWebSearch(query: String): List<SearchResult> {
-        val search = webSearch ?: run {
-            setSearchNotice(SEARCH_NOT_CONFIGURED)
-            return emptyList()
+        val result = searchController.executeSearch(query)
+        if (result.noticeMessage != null) {
+            setSearchNotice(result.noticeMessage)
         }
-        val outcome = try {
-            search(query)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            setSearchNotice(SearchError.Unknown.userMessage)
-            return emptyList()
-        }
-        return when (outcome) {
-            null -> {
-                setSearchNotice(SEARCH_NOT_CONFIGURED)
-                emptyList()
-            }
-            is SearchOutcome.Success ->
-                if (outcome.results.isEmpty()) {
-                    setSearchNotice(SearchError.NoResults.userMessage)
-                    emptyList()
-                } else {
-                    outcome.results
-                }
-            is SearchOutcome.Failure -> {
-                setSearchNotice(outcome.error.userMessage)
-                emptyList()
-            }
-        }
-    }
-
-    private fun deleteFile(path: String) {
-        if (attachmentsDir != null) {
-            runCatching { File(path).delete() }
-        }
+        return result.results
     }
 
     fun stop() {
-        generationJob?.cancel()
+        generationController.stop()
     }
 
     suspend fun send(text: String) {
         val content = text.trim()
-        if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) || isGenerating()) return
+        if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) || generationController.isGenerating) return
         val job = currentCoroutineContext().job
-        generationJob = job
+        generationController.attachJob(job)
         _uiState.update { it.copy(status = ChatStatus.Generating) }
         try {
             sendPrepared(text, content, job)
         } catch (e: CancellationException) {
             _uiState.update { state ->
-                if (generationJob === job && state.status is ChatStatus.Generating) {
+                if (state.status is ChatStatus.Generating) {
                     state.copy(status = ChatStatus.Idle)
                 } else {
                     state
@@ -263,7 +189,6 @@ class ChatRepository(
         val llm = currentLlm() ?: run {
             _uiState.update { it.copy(status = ChatStatus.Idle) }
             refuseWithoutLlm()
-            if (generationJob === job) generationJob = null
             return
         }
         failedAssistantId = null
@@ -302,7 +227,7 @@ class ChatRepository(
             }
             s.appendMessage(userMessage.toEntity(conversationId))
             s.appendMessage(UiMessage(assistantId, Role.ASSISTANT, "", now()).toEntity(conversationId))
-            attachments.forEach { s.appendAttachment(it.toEntity(userMessage.id, conversationId, now())) }
+            attachments.forEach { s.appendAttachment(attachmentManager.toEntity(it, userMessage.id, conversationId, now())) }
             if (webResults.isNotEmpty()) {
                 s.updateSources(assistantId, webResults.toSearchJson())
             }
@@ -312,22 +237,22 @@ class ChatRepository(
     }
 
     suspend fun retry() {
-        if (_uiState.value.status !is ChatStatus.Error || isGenerating()) return
+        if (_uiState.value.status !is ChatStatus.Error || generationController.isGenerating) return
         if (currentLlm() == null) {
             refuseWithoutLlm()
             return
         }
         val failedId = failedAssistantId
         failedAssistantId = null
-        generationJob = currentCoroutineContext().job
+        generationController.attachJob(currentCoroutineContext().job)
         if (failedId != null) {
             _uiState.update { state ->
                 state.copy(messages = state.messages.filterNot { it.id == failedId })
             }
-            versionCache.remove(failedId)
+            versionStore.remove(failedId)
             store?.let { s ->
                 _uiState.value.conversationId?.let { conversationId ->
-                    deleteFiles(s.deleteMessagesFrom(failedId, conversationId))
+                    attachmentManager.deleteFiles(s.deleteMessagesFrom(failedId, conversationId))
                 }
             }
         }
@@ -335,28 +260,24 @@ class ChatRepository(
         appendAssistantPlaceholderAndGenerate()
     }
 
-    /** Clears an error banner without retrying; partial assistant content stays. */
     fun dismissError() {
         if (_uiState.value.status is ChatStatus.Error) {
             _uiState.update { it.copy(status = ChatStatus.Idle) }
         }
     }
 
-    /**
-     * Regenerates the last assistant response, keeping the old answer as a
-     * version: the content is snapshotted, cleared, and the new answer streams
-     * into the same message.
-     */
     suspend fun regenerate() {
         val state = _uiState.value
         val last = state.messages.lastOrNull()
-        if (state.status !is ChatStatus.Idle || isGenerating() || last?.role != Role.ASSISTANT) return
+        if (state.status !is ChatStatus.Idle || generationController.isGenerating || last?.role != Role.ASSISTANT) return
         val llm = currentLlm() ?: run {
             refuseWithoutLlm()
             return
         }
-        generationJob = currentCoroutineContext().job
-        snapshotVersion(last.id)
+        generationController.attachJob(currentCoroutineContext().job)
+        versionStore.snapshotVersion(last.id, state.messages) { transform ->
+            _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+        }
         _uiState.update { s ->
             s.copy(messages = s.messages.map { m ->
                 if (m.id == last.id) m.copy(content = "", reasoning = "") else m
@@ -366,65 +287,45 @@ class ChatRepository(
         startGeneration(llm, last.id)
     }
 
-    /**
-     * Shows answer [index] of an assistant message.
-     */
     suspend fun switchVersion(messageId: String, index: Int) {
-        if (_uiState.value.status !is ChatStatus.Idle || isGenerating()) return
-        val versions = versionCache.versionsOf(messageId) ?: return
-        if (index !in versions.indices) return
-        snapshotVersion(messageId)
-        val current = versionCache.versionsOf(messageId).orEmpty()
-        if (index !in current.indices) return
-        _uiState.update { state ->
-            state.copy(messages = state.messages.map { m ->
-                if (m.id == messageId && m.role == Role.ASSISTANT) {
-                    m.copy(content = current[index], selectedVersion = index, reasoning = "")
-                } else {
-                    m
-                }
-            })
+        if (_uiState.value.status !is ChatStatus.Idle || generationController.isGenerating) return
+        versionStore.snapshotVersion(messageId, _uiState.value.messages) { transform ->
+            _uiState.update { s -> s.copy(messages = transform(s.messages)) }
         }
-        store?.let { s ->
-            s.updateMessageContent(messageId, current[index], "", now())
-            s.updateSelectedVersion(messageId, index)
+        versionStore.switchVersion(messageId, index) { transform ->
+            _uiState.update { s -> s.copy(messages = transform(s.messages)) }
         }
     }
 
-    /** Pins or unpins a saved conversation in the history list. */
     suspend fun setConversationPinned(id: String, pinned: Boolean) {
         store?.setPinned(id, pinned)
     }
 
-    /** Renames a saved conversation; blank titles are ignored. */
     suspend fun renameConversation(id: String, title: String) {
         val trimmed = title.trim()
         if (trimmed.isEmpty()) return
         store?.renameConversation(id, trimmed)
     }
 
-    /**
-     * Truncates the conversation at the given user message, replaces its content, and re-requests.
-     */
     suspend fun editAndResend(messageId: String, newContent: String) {
         val content = newContent.trim()
-        if (content.isEmpty() || isGenerating()) return
+        if (content.isEmpty() || generationController.isGenerating) return
         if (currentLlm() == null) {
             refuseWithoutLlm()
             return
         }
-        generationJob = currentCoroutineContext().job
+        generationController.attachJob(currentCoroutineContext().job)
         val current = _uiState.value
         val index = current.messages.indexOfFirst { it.id == messageId && it.role == Role.USER }
         if (index < 0) return
         failedAssistantId = null
         val edited = current.messages[index].copy(content = content)
         _uiState.update { it.copy(messages = it.messages.take(index) + edited, draft = "") }
-        current.messages.drop(index + 1).forEach { versionCache.remove(it.id) }
+        current.messages.drop(index + 1).forEach { versionStore.remove(it.id) }
         store?.let { s ->
             current.conversationId?.let { conversationId ->
                 current.messages.getOrNull(index + 1)?.let {
-                    deleteFiles(s.deleteMessagesFrom(it.id, conversationId))
+                    attachmentManager.deleteFiles(s.deleteMessagesFrom(it.id, conversationId))
                 }
                 s.updateMessageContent(edited.id, content, "", now())
             }
@@ -437,7 +338,7 @@ class ChatRepository(
         stashIfNoStore()
         failedAssistantId = null
         discardStagedAttachments()
-        versionCache.clear()
+        versionStore.clear()
         _uiState.update {
             it.copy(
                 conversationId = null,
@@ -452,23 +353,19 @@ class ChatRepository(
         }
     }
 
-    /**
-     * Opens a saved conversation: stops active generation, clears leftover draft,
-     * and reloads everything from the store.
-     */
     suspend fun openConversation(id: String) {
         if (_uiState.value.conversationId == id) return
         stop()
-        generationJob?.join()
+        generationController.joinActive()
         stashIfNoStore()
         failedAssistantId = null
         discardStagedAttachments()
-        versionCache.clear()
+        versionStore.clear()
         val versionRows = store?.messageVersions(id)?.first().orEmpty()
         val versionsById = versionRows.groupBy({ it.messageId }, { it.content })
         val attachmentsById = store?.attachments(id)?.first().orEmpty()
-            .groupBy({ it.messageId }, { it.toUiAttachment() })
-        versionCache.loadAll(versionsById)
+            .groupBy({ it.messageId }, { attachmentManager.toUiAttachment(it) })
+        versionStore.loadAll(versionsById)
         val messages = store
             ?.messages(id)
             ?.first()
@@ -517,16 +414,13 @@ class ChatRepository(
         }
     }
 
-    /**
-     * Removes a conversation from history.
-     */
     suspend fun deleteConversation(id: String) {
         if (_uiState.value.conversationId == id) {
             stop()
             failedAssistantId = null
             discardStagedAttachments()
             conversationSnapshots.remove(id)
-            versionCache.clear()
+            versionStore.clear()
             _uiState.update {
                 it.copy(
                     conversationId = null,
@@ -540,7 +434,7 @@ class ChatRepository(
                 )
             }
         }
-        deleteFiles(store?.deleteConversation(id).orEmpty())
+        attachmentManager.deleteFiles(store?.deleteConversation(id).orEmpty())
     }
 
     private fun currentLlm(): ChatLlmState.Ready? = chatLlm.value as? ChatLlmState.Ready
@@ -559,57 +453,34 @@ class ChatRepository(
             .lastOrNull { it.role == Role.USER }
             ?.content
             .orEmpty()
-        val job = currentCoroutineContext().job
-        generationJob = job
-        lastPersistAt = clock()
         _uiState.update { it.copy(status = ChatStatus.Generating) }
-        var failure: ChatChunk.Failure? = null
-        try {
-            withContext(generationDispatcher) {
-                llm.provider
-                    .stream(ChatRequest(model = llm.model, messages = requestMessages, images = images))
-                    .collect { chunk ->
-                        when (chunk) {
-                            is ChatChunk.Delta -> {
-                                appendDelta(assistantId, chunk.text)
-                                maybePersist(assistantId)
-                            }
-                            is ChatChunk.Reasoning -> {
-                                appendReasoning(assistantId, chunk.text)
-                                maybePersist(assistantId)
-                            }
-                            is ChatChunk.Done -> Unit
-                            is ChatChunk.Failure -> failure = chunk
-                        }
-                    }
-            }
-        } catch (e: CancellationException) {
-            withContext(NonCancellable) {
-                persistAssistantContent(assistantId)
-                snapshotVersion(assistantId)
-            }
-            _uiState.update { state ->
-                if (generationJob === job && state.status is ChatStatus.Generating) {
-                    state.copy(status = ChatStatus.Idle)
-                } else {
-                    state
+
+        generationController.runStream(
+            provider = llm.provider,
+            request = ChatRequest(model = llm.model, messages = requestMessages, images = images),
+            onDelta = { appendDelta(assistantId, it) },
+            onReasoning = { appendReasoning(assistantId, it) },
+            onPersist = { persistAssistantContent(assistantId) },
+            onCancelled = {
+                versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
+                    _uiState.update { s -> s.copy(messages = transform(s.messages)) }
                 }
+                _uiState.update { state ->
+                    if (state.status is ChatStatus.Generating) state.copy(status = ChatStatus.Idle) else state
+                }
+            },
+            onFailure = { failure ->
+                failGeneration(assistantId, failure)
+            },
+            onSuccess = {
+                failedAssistantId = null
+                versionStore.snapshotVersion(assistantId, _uiState.value.messages) { transform ->
+                    _uiState.update { s -> s.copy(messages = transform(s.messages)) }
+                }
+                _uiState.update { it.copy(status = ChatStatus.Idle) }
+                fetchFollowUps(llm, assistantId, question)
             }
-            throw e
-        } catch (e: Exception) {
-            failure = ChatChunk.Failure(ProviderError.Unknown, e.message)
-        }
-        val settled = failure
-        if (settled == null) {
-            failedAssistantId = null
-            if (generationJob === job) generationJob = null
-            persistAssistantContent(assistantId)
-            snapshotVersion(assistantId)
-            _uiState.update { it.copy(status = ChatStatus.Idle) }
-            fetchFollowUps(llm, assistantId, question)
-        } else {
-            failGeneration(assistantId, settled)
-        }
+        )
     }
 
     private suspend fun fetchFollowUps(llm: ChatLlmState.Ready, assistantId: String, question: String) {
@@ -674,45 +545,12 @@ class ChatRepository(
         }
     }
 
-    private suspend fun maybePersist(assistantId: String) {
-        val timestamp = clock()
-        if (timestamp - lastPersistAt >= PERSIST_THROTTLE_MS) {
-            lastPersistAt = timestamp
-            persistAssistantContent(assistantId)
-        }
-    }
-
     private suspend fun persistAssistantContent(assistantId: String) {
         val s = store ?: return
         val state = _uiState.value
         val conversationId = state.conversationId ?: return
         val message = state.messages.firstOrNull { it.id == assistantId } ?: return
         s.updateMessageContent(assistantId, message.content, message.reasoning, now())
-    }
-
-    private suspend fun snapshotVersion(messageId: String) {
-        val content = _uiState.value.messages
-            .firstOrNull { it.id == messageId }
-            ?.takeIf { it.role == Role.ASSISTANT }
-            ?.content
-            ?: return
-        if (content.isBlank()) return
-        val appended = versionCache.append(messageId, content)
-        if (appended) {
-            store?.saveVersion(messageId, content)
-        }
-        val versions = versionCache.versionsOf(messageId).orEmpty()
-        val selected = versions.lastIndex
-        _uiState.update { state ->
-            state.copy(messages = state.messages.map { m ->
-                if (m.id == messageId) {
-                    m.copy(content = content, versions = versions.toList(), selectedVersion = selected)
-                } else {
-                    m
-                }
-            })
-        }
-        store?.updateSelectedVersion(messageId, selected)
     }
 
     private suspend fun failGeneration(assistantId: String, failure: ChatChunk.Failure) {
@@ -730,7 +568,7 @@ class ChatRepository(
             if (kept) {
                 persistAssistantContent(assistantId)
             } else {
-                deleteFiles(store.deleteMessagesFrom(assistantId, conversationId))
+                attachmentManager.deleteFiles(store.deleteMessagesFrom(assistantId, conversationId))
             }
         }
         failedAssistantId = if (kept) assistantId else null
@@ -782,41 +620,12 @@ class ChatRepository(
     private fun readTextFile(path: String): String =
         File(path).takeIf { it.exists() }?.readText().orEmpty()
 
-    private fun deleteFiles(paths: List<String>) {
-        if (attachmentsDir == null) return
-        paths.forEach { path -> runCatching { File(path).delete() } }
-    }
-
-    private fun isGenerating(): Boolean = generationJob?.isActive == true
-
     private fun stashIfNoStore() {
         if (store != null) return
         val state = _uiState.value
         val id = state.conversationId ?: return
         conversationSnapshots[id] = state.messages
     }
-
-    private fun UiAttachment.toEntity(messageId: String, conversationId: String, createdAt: Long) =
-        AttachmentEntity(
-            id = id,
-            messageId = messageId,
-            conversationId = conversationId,
-            kind = kind.name,
-            displayName = displayName,
-            mime = mime,
-            path = path,
-            sizeBytes = sizeBytes,
-            createdAt = createdAt,
-        )
-
-    private fun AttachmentEntity.toUiAttachment() = UiAttachment(
-        id = id,
-        kind = UiAttachment.Kind.valueOf(kind),
-        displayName = displayName,
-        mime = mime,
-        path = path,
-        sizeBytes = sizeBytes,
-    )
 
     private fun UiMessage.toEntity(conversationId: String) = MessageEntity(
         id = id,
@@ -832,8 +641,6 @@ class ChatRepository(
     private fun now(): Long = clock()
 
     companion object {
-        const val PERSIST_THROTTLE_MS = 300L
-
         fun buildShareText(title: String, messages: List<UiMessage>): String = buildString {
             append(title)
             messages.forEach { message ->
@@ -849,8 +656,8 @@ class ChatRepository(
             }
         }
 
-        const val SEARCH_NOT_CONFIGURED = "Configure a search service in Settings first."
-        const val MAX_IMAGES_PER_MESSAGE = AttachmentIngester.MAX_IMAGES_PER_MESSAGE
-        const val MAX_TEXTS_PER_MESSAGE = AttachmentIngester.MAX_TEXTS_PER_MESSAGE
+        const val SEARCH_NOT_CONFIGURED = SearchController.SEARCH_NOT_CONFIGURED
+        const val MAX_IMAGES_PER_MESSAGE = AttachmentManager.MAX_IMAGES_PER_MESSAGE
+        const val MAX_TEXTS_PER_MESSAGE = AttachmentManager.MAX_TEXTS_PER_MESSAGE
     }
 }

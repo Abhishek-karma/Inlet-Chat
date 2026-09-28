@@ -1,4 +1,4 @@
-package com.assistant.app.data
+package com.assistant.app.data.generation
 
 import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.model.ChatChunk
