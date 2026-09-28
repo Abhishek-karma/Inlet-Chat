@@ -175,6 +175,29 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `failed partial assistant message is excluded from subsequent send context`() = runChatTest(
+        script = listOf(
+            ScriptedEvent.Delay(50),
+            ScriptedEvent.Emit("Partial answer before failure"),
+            ScriptedEvent.Fail(ProviderError.ServerError)
+        ),
+    ) { viewModel, provider, _ ->
+        viewModel.send("Question 1")
+        advanceUntilIdle()
+
+        assertEquals(ChatStatus.Error(ProviderError.ServerError.userMessage), viewModel.uiState.value.status)
+
+        provider.script = listOf(
+            ScriptedEvent.Emit("Clean answer")
+        )
+        viewModel.send("Question 2")
+        advanceUntilIdle()
+
+        val lastRequest = provider.requests.last()
+        assertFalse(lastRequest.messages.any { it.second.contains("Partial answer before failure") })
+    }
+
+    @Test
     fun `regenerate keeps the message, versions the old answer, and re-requests from history`() = runChatTest(
         script = listOf(ScriptedEvent.Emit("Hello")),
     ) { viewModel, provider, _ ->
@@ -254,7 +277,6 @@ class ChatViewModelTest {
 
 
     @Test
-
     fun `follow-up suggestions attach to a substantial answer`() = runChatTest(
         script = listOf(ScriptedEvent.Emit(LONG_ANSWER)),
         followUpSuggestions = { _, _, question, answer ->
@@ -271,7 +293,6 @@ class ChatViewModelTest {
     }
 
     @Test
-
     fun `a short answer costs no extra request`() = runChatTest(
         script = listOf(ScriptedEvent.Emit("Hi")),
         followUpSuggestions = { _, _, _, _ -> listOf("Should not be called") },
@@ -284,7 +305,6 @@ class ChatViewModelTest {
     }
 
     @Test
-
     fun `a failing suggestion request leaves the chat clean`() = runChatTest(
         script = listOf(ScriptedEvent.Emit(LONG_ANSWER)),
         followUpSuggestions = { _, _, _, _ -> throw IllegalStateException("boom") },
@@ -295,6 +315,7 @@ class ChatViewModelTest {
         assertEquals(ChatStatus.Idle, viewModel.uiState.value.status)
         assertEquals(emptyList<String>(), viewModel.uiState.value.messages[1].followUps)
     }
+
     @Test
     fun `attachment limits are enforced on staged attachments`() = runChatTest(
         script = emptyList(),
@@ -395,7 +416,6 @@ class ChatViewModelTest {
         val firstUserId = viewModel.uiState.value.messages[0].id
 
         provider.script = listOf(ScriptedEvent.Emit("Edited reply"))
-        // The composer carries the edited content as the draft, like the UI.
         viewModel.setDraft("Edited")
         viewModel.editAndResend(firstUserId, "Edited")
         advanceUntilIdle()
@@ -450,7 +470,6 @@ class ChatViewModelTest {
         assertEquals(ChatStatus.Idle, repository.uiState.value.status)
         assertEquals("Hel", repository.uiState.value.messages[1].content)
 
-        // A fresh ViewModel over the same repository can generate again.
         val replacement = ChatViewModel(
             repository,
             MutableStateFlow(ChatLlmState.Ready(provider, "test-model")),
@@ -582,7 +601,6 @@ class ChatViewModelTest {
         assertTrue(viewModel.uiState.value.status is ChatStatus.Error)
         assertEquals(1, viewModel.uiState.value.messages.size)
 
-        // The provider degrades mid-session (settings cleared, key removed).
         chatLlm.value = ChatLlmState.NeedsSetup
         viewModel.retry()
         advanceUntilIdle()
@@ -591,7 +609,7 @@ class ChatViewModelTest {
         assertTrue(state.needsSetup)
         assertTrue(state.status is ChatStatus.Error)
         assertEquals(1, state.messages.size)
-        assertEquals(1, provider.requests.size) // no second request was made
+        assertEquals(1, provider.requests.size)
     }
 
     @Test
@@ -618,44 +636,45 @@ class ChatViewModelTest {
         assertEquals(1, provider.requests.size)
     }
 
-@Test
-fun `staged attachments do not cross conversation boundaries`() = runChatTest(
-    script = listOf(ScriptedEvent.Emit("Hello")),
-) { viewModel, _, repository ->
-    repository.addPendingAttachments(
-        listOf(
-            com.assistant.app.llm.model.UiAttachment(
-                id = "a1",
-                kind = com.assistant.app.llm.model.UiAttachment.Kind.IMAGE,
-                displayName = "i.jpg",
-                mime = "image/jpeg",
-                path = "/nonexistent",
-                sizeBytes = 1,
+    @Test
+    fun `staged attachments do not cross conversation boundaries`() = runChatTest(
+        script = listOf(ScriptedEvent.Emit("Hello")),
+    ) { viewModel, _, repository ->
+        repository.addPendingAttachments(
+            listOf(
+                com.assistant.app.llm.model.UiAttachment(
+                    id = "a1",
+                    kind = com.assistant.app.llm.model.UiAttachment.Kind.IMAGE,
+                    displayName = "i.jpg",
+                    mime = "image/jpeg",
+                    path = "/nonexistent",
+                    sizeBytes = 1,
+                ),
             ),
-        ),
-    )
+        )
 
-    viewModel.newConversation()
+        viewModel.newConversation()
 
-    assertEquals(
-        emptyList<com.assistant.app.llm.model.UiAttachment>(),
-        viewModel.uiState.value.pendingAttachments,
-    )
+        assertEquals(
+            emptyList<com.assistant.app.llm.model.UiAttachment>(),
+            viewModel.uiState.value.pendingAttachments,
+        )
 
-    viewModel.send("Hi")
-    advanceUntilIdle()
-    assertEquals(0, viewModel.uiState.value.messages[0].attachments.size)
-}
-@Test
-fun `share text builder produces a readable transcript`() {
-    val messages = listOf(
-        com.assistant.app.llm.model.UiMessage("1", Role.USER, "Hi", 0),
-        com.assistant.app.llm.model.UiMessage("2", Role.ASSISTANT, "Hello", 1),
-        com.assistant.app.llm.model.UiMessage("3", Role.ASSISTANT, "", 2),
-    )
-    val text = ChatRepository.buildShareText("Title", messages)
-    assertEquals("Title\n\nYou: Hi\n\nAssistant: Hello", text)
-}
+        viewModel.send("Hi")
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.messages[0].attachments.size)
+    }
+
+    @Test
+    fun `share text builder produces a readable transcript`() {
+        val messages = listOf(
+            com.assistant.app.llm.model.UiMessage("1", Role.USER, "Hi", 0),
+            com.assistant.app.llm.model.UiMessage("2", Role.ASSISTANT, "Hello", 1),
+            com.assistant.app.llm.model.UiMessage("3", Role.ASSISTANT, "", 2),
+        )
+        val text = ChatRepository.buildShareText("Title", messages)
+        assertEquals("Title\n\nYou: Hi\n\nAssistant: Hello", text)
+    }
 }
 
 class ChatSearchTest {
