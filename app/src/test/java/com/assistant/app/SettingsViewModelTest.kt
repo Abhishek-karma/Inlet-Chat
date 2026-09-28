@@ -320,12 +320,14 @@ class SettingsViewModelTest {
         awaitSettled(viewModel)
         viewModel.startAdd()
         viewModel.setApiKeyInput("sk-super-secret")
+        viewModel.setSearchApiKeyInput("brave-super-secret")
         viewModel.setRevealKey(true)
 
         val text = viewModel.uiState.value.toString()
 
         assertTrue(text.contains("<redacted>"))
         assertFalse(text.contains("sk-super-secret"))
+        assertFalse(text.contains("brave-super-secret"))
         assertFalse(text.contains("sk-stored"))
     }
 
@@ -395,7 +397,7 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertNull(viewModel.uiState.value.voiceId)
-            assertNull(appPreferences.voiceId.firstBounded("voiceId cleared") { true })
+            assertNull(appPreferences.voiceId.firstBounded("voiceId cleared") { it == null })
         }
 
     @Test

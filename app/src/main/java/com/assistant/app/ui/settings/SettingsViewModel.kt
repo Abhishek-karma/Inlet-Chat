@@ -84,7 +84,9 @@ data class SettingsUiState(
             "name=$name, baseUrl=$baseUrl, model=$model, apiKeyInput=<redacted>, " +
             "storedKey=${if (storedKey != null) "<present>" else "null"}, " +
             "revealKey=$revealKey, voiceOutputEnabled=$voiceOutputEnabled, " +
-            "appearance=$appearance, reasoningVisible=$reasoningVisible, ttsAvailable=$ttsAvailable, " +
+            "appearance=$appearance, reasoningVisible=$reasoningVisible, " +
+            "searchApiKeyInput=<redacted>, storedSearchKey=${if (storedSearchKey != null) "<present>" else "null"}, " +
+            "ttsAvailable=$ttsAvailable, " +
             "isLoaded=$isLoaded, " +
             "isSaving=$isSaving, isTesting=$isTesting, formError=$formError, " +
             "connectionOutcome=$connectionOutcome)"

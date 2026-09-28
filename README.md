@@ -52,13 +52,13 @@ OpenAI-compatible API
 
 ## Building
 
-Requirements: JDK 21, Android SDK (compileSdk 35).
+Requirements: JDK 17+ (JDK 21 compatible), Android SDK (compileSdk 35), Java 11 bytecode target (`JavaVersion.VERSION_11`).
 
 ```text
-./gradlew :app:assembleDebug          # debug build
-./gradlew :app:testDebugUnitTest      # unit tests
-./gradlew :app:lintDebug              # lint
-./gradlew :app:assembleRelease        # minified release build
+gradle :app:assembleDebug          # debug build
+gradle :app:testDebugUnitTest      # unit tests
+gradle :app:lintDebug              # lint
+gradle :app:assembleRelease        # minified release build
 ```
 
 The release build uses R8 minification and resource shrinking. It is produced
@@ -67,19 +67,25 @@ before installing a release build on a device.
 
 ## Configuration
 
-- applicationId: `com.assistant.app`
+- namespace: `com.assistant.app`
+- applicationId: `com.aistudio.inletchat.wzptbq`
 - minSdk: 26, targetSdk: 35
 - version: 1.0.0 (versionCode 1)
+- JVM Target: 11 (`sourceCompatibility = JavaVersion.VERSION_11`, `targetCompatibility = JavaVersion.VERSION_11`, `jvmTarget = 11`)
 
-## Provider Configuration
+## Provider Configuration & Security
 
 In the app's settings screen, configure an OpenAI-compatible provider:
 
 1. Set a display name, base URL (e.g. `https://api.openai.com/v1`), API key, and model.
 2. Use the connection test to verify the configuration before chatting.
-3. The API key is stored locally in EncryptedSharedPreferences
-   (`androidx.security.crypto`, with `allowBackup=false`). It is never logged,
-   never committed, and only sent to the configured provider endpoint.
+3. The API key is stored locally in `EncryptedSharedPreferences`
+   (`androidx.security.crypto` backed by Android KeyStore AES-256-GCM, with `allowBackup=false`).
+   It is never logged, never written to plain DataStore/Room, never committed to version control,
+   and only sent to the configured provider endpoint over TLS/HTTPS (or explicit local/loopback endpoints).
+4. **Security Notice**: Zero hardcoded provider keys are shipped. All provider access is strictly BYOK.
+   If any API keys or tokens were ever committed in prior development commits, they must be immediately
+   rotated and revoked at the respective provider's console.
 
 ## Manual Device Verification
 
