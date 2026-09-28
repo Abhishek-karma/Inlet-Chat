@@ -1,13 +1,11 @@
 package com.assistant.app.ui.onboarding
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.displayCutoutPadding
@@ -29,10 +27,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,15 +45,17 @@ import androidx.compose.ui.unit.dp
 import com.assistant.app.R
 import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.theme.AppDimens
+import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
+import com.assistant.app.ui.theme.appTween
 import kotlinx.coroutines.launch
 
 private const val PAGE_COUNT = 3
 
 /**
- * Inlet Chat Onboarding: Minimal, spacious introduction to user-controlled AI conversation.
- * Handles display cutouts, system bar insets, font scaling, and wide screens cleanly.
+ * Premium, spacious onboarding flow introducing the core product values:
+ * What this app is -> What you control -> How to start quickly.
  */
 @Composable
 fun OnboardingScreen(
@@ -83,39 +83,53 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .wrapContentWidth(Alignment.CenterHorizontally)
                 .widthIn(max = AppDimens.maxContentWidth)
-                .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.lg),
+                .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.md),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Top Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = AppSpacing.xs),
+                    .padding(vertical = AppSpacing.xs),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_inlet_logo),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_inlet_logo),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                     Spacer(Modifier.width(AppSpacing.sm))
                     Text(
                         text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                TextButton(onClick = onDone) {
+
+                TextButton(
+                    onClick = onDone,
+                    modifier = Modifier.height(48.dp),
+                ) {
                     Text(
                         text = stringResource(R.string.onboarding_skip),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
+            // Pager Canvas
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
@@ -125,32 +139,40 @@ fun OnboardingScreen(
                 OnboardingPage(page = page)
             }
 
+            Spacer(Modifier.height(AppSpacing.md))
+
+            // Progress Indicator Dots
             Row(
                 horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-                modifier = Modifier.padding(vertical = AppSpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = AppSpacing.sm),
             ) {
                 repeat(PAGE_COUNT) { index ->
                     val active = pagerState.currentPage == index
-                    val dotLabel = "Page ${index + 1} of $PAGE_COUNT"
+                    val animatedWidth by animateDpAsState(
+                        targetValue = if (active) 24.dp else 8.dp,
+                        animationSpec = appTween(AppMotion.MEDIUM),
+                        label = "dotWidth",
+                    )
                     Box(
                         modifier = Modifier
-                            .size(
-                                width = if (active) 20.dp else 6.dp,
-                                height = 6.dp,
-                            )
+                            .size(width = animatedWidth, height = 8.dp)
                             .clip(AppShape.pill)
                             .background(
                                 if (active) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
-                                    MaterialTheme.colorScheme.outlineVariant
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 },
                             )
-                            .semantics { contentDescription = dotLabel },
+                            .semantics { contentDescription = "Page ${index + 1} of $PAGE_COUNT" },
                     )
                 }
             }
 
+            Spacer(Modifier.height(AppSpacing.md))
+
+            // Prominent Primary CTA Button
             Button(
                 onClick = {
                     if (isLast) {
@@ -160,23 +182,28 @@ fun OnboardingScreen(
                     }
                 },
                 shape = AppShape.pill,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .widthIn(max = 420.dp)
+                    .height(56.dp),
             ) {
                 Text(
-                    stringResource(
+                    text = stringResource(
                         if (isLast) R.string.onboarding_get_started else R.string.onboarding_next,
                     ),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 )
             }
+
+            Spacer(Modifier.height(AppSpacing.xs))
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OnboardingPage(page: Int) {
     val scrollState = rememberScrollState()
@@ -185,108 +212,248 @@ private fun OnboardingPage(page: Int) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.lg),
+            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        val title = stringResource(
-            when (page) {
-                0 -> R.string.onboarding_title_1
-                1 -> R.string.onboarding_title_2
-                else -> R.string.onboarding_title_3
-            },
-        )
-        val body = stringResource(
-            when (page) {
-                0 -> R.string.onboarding_body_1
-                1 -> R.string.onboarding_body_2
-                else -> R.string.onboarding_body_3
-            },
-        )
+        when (page) {
+            0 -> PageWhatThisAppIs()
+            1 -> PageWhatYouControl()
+            else -> PageHowToStartQuickly()
+        }
+    }
+}
+
+@Composable
+private fun PageWhatThisAppIs() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_inlet_logo),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp),
+            )
+        }
+
+        Spacer(Modifier.height(AppSpacing.xl))
 
         Text(
-            text = title,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
+            text = stringResource(R.string.onboarding_title_1),
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
         )
+
         Spacer(Modifier.height(AppSpacing.md))
+
         Text(
-            text = body,
+            text = stringResource(R.string.onboarding_body_1),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 460.dp),
         )
 
-        if (page == 0) {
-            Spacer(Modifier.height(AppSpacing.xxl))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                listOf("Any Model", "Your Keys", "Direct API").forEach { badge ->
-                    Surface(
-                        shape = AppShape.pill,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    ) {
-                        Text(
-                            text = badge,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 6.dp),
-                        )
-                    }
-                }
-            }
+        Spacer(Modifier.height(AppSpacing.xxl))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+            modifier = Modifier.widthIn(max = 380.dp),
+        ) {
+            FeatureRow(
+                icon = AppIcons.Sparkle,
+                title = "OpenAI-Compatible",
+                subtitle = "Works with standard AI providers and endpoints",
+            )
+            FeatureRow(
+                icon = AppIcons.Info,
+                title = "On-Device Keys",
+                subtitle = "API keys stay encrypted on your phone",
+            )
+            FeatureRow(
+                icon = AppIcons.Globe,
+                title = "Direct API Calls",
+                subtitle = "No intermediary servers or hidden tracking",
+            )
+        }
+    }
+}
+
+@Composable
+private fun PageWhatYouControl() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(AppIcons.Sparkle),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(36.dp),
+            )
         }
 
-        if (page == 2) {
-            Spacer(Modifier.height(AppSpacing.xl))
-            listOf(
-                AppIcons.Chat to R.string.onboarding_cap_chat,
-                AppIcons.Mic to R.string.onboarding_cap_voice,
-                AppIcons.Image to R.string.onboarding_cap_images,
-                AppIcons.File to R.string.onboarding_cap_files,
-            ).forEach { (icon, res) ->
-                Surface(
-                    shape = AppShape.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 380.dp)
-                        .padding(vertical = 3.dp),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 10.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                painter = painterResource(icon),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                        Text(
-                            text = stringResource(res),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(start = AppSpacing.md),
-                        )
-                    }
-                }
-            }
+        Spacer(Modifier.height(AppSpacing.xl))
+
+        Text(
+            text = stringResource(R.string.onboarding_title_2),
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(Modifier.height(AppSpacing.md))
+
+        Text(
+            text = stringResource(R.string.onboarding_body_2),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 460.dp),
+        )
+
+        Spacer(Modifier.height(AppSpacing.xxl))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+            modifier = Modifier.widthIn(max = 380.dp),
+        ) {
+            FeatureRow(
+                icon = AppIcons.Palette,
+                title = "Custom Providers",
+                subtitle = "Configure base URLs, custom headers, and models",
+            )
+            FeatureRow(
+                icon = AppIcons.Brain,
+                title = "Reasoning Visibility",
+                subtitle = "View structured thinking and model search steps",
+            )
+            FeatureRow(
+                icon = AppIcons.Globe,
+                title = "Optional Web Search",
+                subtitle = "Ground answers with live web research when enabled",
+            )
+        }
+    }
+}
+
+@Composable
+private fun PageHowToStartQuickly() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.tertiaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(AppIcons.Chat),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(36.dp),
+            )
+        }
+
+        Spacer(Modifier.height(AppSpacing.xl))
+
+        Text(
+            text = stringResource(R.string.onboarding_title_3),
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(Modifier.height(AppSpacing.md))
+
+        Text(
+            text = stringResource(R.string.onboarding_body_3),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 460.dp),
+        )
+
+        Spacer(Modifier.height(AppSpacing.xxl))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+            modifier = Modifier.widthIn(max = 380.dp),
+        ) {
+            FeatureRow(
+                icon = AppIcons.Chat,
+                title = stringResource(R.string.onboarding_cap_chat),
+                subtitle = "Fast streaming answers with version comparison",
+            )
+            FeatureRow(
+                icon = AppIcons.Mic,
+                title = stringResource(R.string.onboarding_cap_voice),
+                subtitle = "Hands-free voice input & spoken answers",
+            )
+            FeatureRow(
+                icon = AppIcons.Image,
+                title = stringResource(R.string.onboarding_cap_images),
+                subtitle = "Camera capture & photo analysis context",
+            )
+            FeatureRow(
+                icon = AppIcons.File,
+                title = stringResource(R.string.onboarding_cap_files),
+                subtitle = "Plain text & document file ingestion",
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeatureRow(
+    icon: Int,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        Spacer(Modifier.width(AppSpacing.md))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
