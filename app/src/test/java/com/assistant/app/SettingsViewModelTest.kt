@@ -77,7 +77,8 @@ class SettingsViewModelTest {
             .allowMainThreadQueries()
             .build()
         val keyStore = InMemorySecureKeyStore()
-        val appPreferences = AppPreferences(context, mainDispatcher)
+        val prefsFile = java.io.File.createTempFile("test_prefs", ".preferences_pb", context.cacheDir)
+        val appPreferences = AppPreferences(context, mainDispatcher, dataStoreFile = prefsFile)
         val providerStore = ProviderStore(db, appPreferences, keyStore, mainDispatcher)
         try {
             seed(providerStore, appPreferences)
@@ -89,10 +90,12 @@ class SettingsViewModelTest {
                 newTestProvider = { _, _, _ -> provider },
                 voiceOutput = voiceOutput,
                 connectionTestDispatcher = mainDispatcher,
+                ioDispatcher = mainDispatcher,
             )
             block(viewModel, providerStore, appPreferences, provider)
         } finally {
             db.close()
+            prefsFile.delete()
         }
     }
 
@@ -406,8 +409,11 @@ class SettingsViewModelTest {
 
             viewModel.setSearchEndpointInput("https://custom-searxng.example/search")
             viewModel.saveSearch()
+            advanceUntilIdle()
 
-            val stored = appPreferences.searchEndpoint.first()
+            val stored = appPreferences.searchEndpoint.firstBounded("searchEndpoint updated") {
+                it == "https://custom-searxng.example/search"
+            }
             assertEquals("https://custom-searxng.example/search", stored)
             assertEquals("https://custom-searxng.example/search", viewModel.uiState.value.storedSearchEndpoint)
             assertTrue(viewModel.uiState.value.searchConfigured)

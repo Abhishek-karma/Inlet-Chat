@@ -55,6 +55,7 @@ class WebSearchClientTest {
         apiKey = apiKey,
         dispatcher = Dispatchers.Unconfined,
         maxPagesToFetch = maxPagesToFetch,
+        allowPrivateHosts = true,
     )
 
     @Test
@@ -106,7 +107,7 @@ class WebSearchClientTest {
         server.enqueue(
             MockResponse()
                 .setHeader("Content-Type", "text/html; charset=utf-8")
-                .setBody("<html><head><title>Kotlin Lang</title></head><body><article><p>Kotlin is a modern language.</p></article></body></html>"),
+                .setBody("<html><head><title>Kotlin Lang</title></head><body><article><p>Kotlin is a modern language designed to make developers happier.</p></article></body></html>"),
         )
         server.enqueue(
             MockResponse()
@@ -119,8 +120,8 @@ class WebSearchClientTest {
         assertTrue(outcome is SearchOutcome.Success)
         val results = (outcome as SearchOutcome.Success).results
         assertEquals(2, results.size)
-        assertEquals("Kotlin Lang", results[0].title)
-        assertTrue(results[0].snippet.contains("Kotlin is a modern language."))
+        assertEquals("Kotlin Programming Language", results[0].title)
+        assertTrue(results[0].snippet.contains("Kotlin is a modern language"))
         assertEquals(server.url("/page1").toString(), results[0].url)
         assertEquals("google", results[0].engine)
     }

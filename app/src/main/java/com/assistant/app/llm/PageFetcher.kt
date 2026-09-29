@@ -18,12 +18,13 @@ class HttpPageFetcher(
     private val client: OkHttpClient,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val maxBytes: Int = MAX_PAGE_BYTES,
+    private val allowPrivateHosts: Boolean = false,
 ) : PageFetcher {
 
     override suspend fun fetch(url: String): String? = withContext(dispatcher) {
         val parsed = url.toHttpUrlOrNull() ?: return@withContext null
         if (parsed.scheme != "https" && parsed.scheme != "http") return@withContext null
-        if (isPrivateHost(parsed.host)) return@withContext null
+        if (!allowPrivateHosts && isPrivateHost(parsed.host)) return@withContext null
 
         val request = Request.Builder()
             .url(parsed)

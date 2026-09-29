@@ -38,7 +38,7 @@ import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
 /**
- * Nara Attachment Sheet: Media, documents, and web search toggle.
+ * Inlet Attachment Sheet: Media, documents, and web search toggle.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

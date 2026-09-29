@@ -64,7 +64,7 @@ class ChatScreenShellTest {
             }
         }
 
-        // "Nara" appears in the top bar and the drawer sheet.
+        // "Inlet Chat" appears in the top bar and the drawer sheet.
         composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.app_name))
             .onFirst().assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.chat_empty_statement)).assertIsDisplayed()

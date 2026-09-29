@@ -47,7 +47,7 @@ import com.assistant.app.ui.theme.AppSpacing
 private const val RECENT_COUNT = 8
 
 /**
- * Nara Search: Clean query filtering over conversation history.
+ * Inlet Search: Clean query filtering over conversation history.
  */
 @Composable
 fun SearchScreen(

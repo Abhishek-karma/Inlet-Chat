@@ -12,5 +12,4 @@
     <style name="Theme.InletChat.Splash" parent="Theme.InletChat">
         <item name="android:windowBackground">@drawable/launch_splash</item>
     </style>
-    <style name="Theme.Nara" parent="Theme.InletChat" />
 </resources>

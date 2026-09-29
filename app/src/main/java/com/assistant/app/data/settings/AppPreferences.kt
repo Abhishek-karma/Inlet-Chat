@@ -9,7 +9,9 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -37,12 +39,14 @@ enum class TextSize(val scale: Float) { SMALL(0.9f), NORMAL(1.0f), LARGE(1.15f) 
 class AppPreferences(
     context: Context,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    dataStoreFile: File? = null,
 ) {
 
     private val appContext = context.applicationContext
 
     private val dataStore = PreferenceDataStoreFactory.create(
-        produceFile = { File(appContext.filesDir, DATA_STORE_FILE) },
+        scope = CoroutineScope(ioDispatcher + SupervisorJob()),
+        produceFile = { dataStoreFile ?: File(appContext.filesDir, DATA_STORE_FILE) },
     )
 
     /** Whether completed assistant messages should be spoken. */

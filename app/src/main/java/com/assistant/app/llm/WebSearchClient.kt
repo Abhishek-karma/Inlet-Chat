@@ -29,9 +29,10 @@ class WebSearchClient(
         apiKey: String? = null,
         dispatcher: CoroutineDispatcher = Dispatchers.IO,
         maxPagesToFetch: Int = DEFAULT_MAX_PAGES_TO_FETCH,
+        allowPrivateHosts: Boolean = false,
     ) : this(
         provider = SearXNGSearchProvider(client, endpoint, apiKey, dispatcher),
-        pageFetcher = HttpPageFetcher(client, dispatcher),
+        pageFetcher = HttpPageFetcher(client, dispatcher, allowPrivateHosts = allowPrivateHosts),
         contentExtractor = JsoupContentExtractor(),
         dispatcher = dispatcher,
         maxPagesToFetch = maxPagesToFetch,

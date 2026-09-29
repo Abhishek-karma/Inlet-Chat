@@ -68,17 +68,19 @@ private fun streamingBlocks(text: String, codeBackground: Color, linkColor: Colo
     val initial = remember(codeBackground, linkColor) {
         MarkdownParser.parse(text, codeBackground, linkColor)
     }
-    return produceState(initial, codeBackground, linkColor) {
+    var blocks by remember(codeBackground, linkColor) { mutableStateOf(initial) }
+    LaunchedEffect(codeBackground, linkColor) {
         var rendered = text
         while (currentCoroutineContext().isActive) {
             delay(STREAM_PARSE_INTERVAL_MS)
             val current = latest
             if (current != rendered) {
                 rendered = current
-                value = MarkdownParser.parse(current, codeBackground, linkColor)
+                blocks = MarkdownParser.parse(current, codeBackground, linkColor)
             }
         }
-    }.value
+    }
+    return blocks
 }
 
 @Composable

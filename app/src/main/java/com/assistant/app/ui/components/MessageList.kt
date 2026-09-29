@@ -82,7 +82,7 @@ internal fun isWebUrl(url: String): Boolean =
     url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)
 
 /**
- * Nara Message Transcript: Content-first conversation stream optimized for reading comfort.
+ * Inlet Message Transcript: Content-first conversation stream optimized for reading comfort.
  */
 @Composable
 fun MessageList(

@@ -45,7 +45,7 @@ import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
 /**
- * Nara Top Bar: Quiet, content-first navigation and model indicator.
+ * Inlet Top Bar: Quiet, content-first navigation and model indicator.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

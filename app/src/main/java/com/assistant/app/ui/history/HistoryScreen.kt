@@ -83,7 +83,7 @@ private val groupLabels = intArrayOf(
 )
 
 /**
- * Nara History: Fast scanning, pinned prioritization, and contextual management.
+ * Inlet History: Fast scanning, pinned prioritization, and contextual management.
  */
 @Composable
 fun HistoryScreen(

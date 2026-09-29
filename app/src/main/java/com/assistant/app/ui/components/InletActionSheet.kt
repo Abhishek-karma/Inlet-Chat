@@ -38,9 +38,9 @@ import com.assistant.app.ui.theme.AppSpacing
 import com.assistant.app.ui.theme.rememberHaptics
 
 /**
- * An action in a [NaraActionSheet].
+ * An action in an [InletActionSheet].
  */
-data class NaraAction(
+data class InletAction(
     val label: String,
     val icon: Int,
     val onClick: () -> Unit,
@@ -50,15 +50,22 @@ data class NaraAction(
     val onClickLabel: String? = null,
 )
 
-typealias InletChatAction = NaraAction
+typealias NaraAction = InletAction
+typealias InletChatAction = InletAction
+
+@Composable
+fun NaraActionSheet(
+    actions: List<InletAction>,
+    onDismiss: () -> Unit,
+) = InletActionSheet(actions, onDismiss)
 
 /**
  * Inlet Chat Action Sheet: Ergonomic thumb-reachable bottom menu.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NaraActionSheet(
-    actions: List<NaraAction>,
+fun InletActionSheet(
+    actions: List<InletAction>,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(

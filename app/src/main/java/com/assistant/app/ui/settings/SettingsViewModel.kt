@@ -583,7 +583,7 @@ class SettingsViewModel(
                 return@launch
             }
 
-            val currentEndpoint = appPreferences.searchEndpoint.first()
+            val currentEndpoint = targetEndpoint
             val currentKey = withContext(ioDispatcher) { secureKeyStore.searchApiKey() }
             _uiState.update {
                 it.copy(
