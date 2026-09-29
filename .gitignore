@@ -14,6 +14,10 @@ captures/
 local.properties
 .kotlin/
 
+# Local docs
+AGENTS.md
+design.md
+
 # OS
 .DS_Store
 Thumbs.db

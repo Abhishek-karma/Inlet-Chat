@@ -1,37 +1,46 @@
-# Android AI Assistant
+# Inlet Chat
 
-A minimal Android AI assistant focused on reliable conversation.
+[![Release](https://github.com/Abhishek-karma/Repo/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/Repo/actions/workflows/release.yml)
+
+A minimal Android AI chat application focused on reliable, private conversation with OpenAI-compatible providers.
+
+## Overview
+
+Inlet Chat is a bring-your-own-key (BYOK) chat client for Android. It provides token-level streaming, conversation history, voice input and output, attachments, and optional web-grounded answers — with API keys stored only on the device.
+
+Inlet Chat is a chat application, not an agent platform: it has no autonomous agent loop, no background execution, and no local model inference.
 
 ## Features
 
-- Text chat
-- Real streaming responses (token-level, with stop)
-- Retry, regenerate, and edit-and-resend
-- Answer versions: regenerating keeps previous answers switchable on the message
-- Follow-up suggestion chips after each answer (silent on failure)
-- Conversation history with pin, rename, and delete
-- Multiple saved OpenAI-compatible providers with a top-bar switcher
-- Configurable provider (name, base URL, API key, model)
-- Image and text-file attachments (downscaled/copied locally; images sent as
-  data-URL parts, text files inlined as context)
-- Real model reasoning shown in a collapsible section when the provider
-  streams it (`reasoning_content`), with a settings toggle
-- Voice upgrades: TTS speed, auto-play toggle, manual per-message playback,
-  markdown stripped before speaking
-- Optional web search: configure a SearXNG/Brave/Tavily-compatible service in
-  settings, toggle per conversation; results ground the answer and sources are
-  listed under it
-- Connection test for provider configuration
-- Voice input (SpeechRecognizer) and optional voice output (TTS)
-- Light/dark appearance (System / Light / Dark) and text-size setting
-- Richer message markdown: headings, list items, and tables alongside code
-  blocks, links, and emphasis; offline LaTeX and Mermaid diagram rendering
-- Time-of-day greeting on the home screen
-- Share a conversation as plain text from history
+**Conversation**
 
-The application does not use an autonomous agent architecture.
+- Token-level streaming responses with stop control
+- Retry, regenerate, and edit-and-resend
+- Answer versions — regenerating keeps previous answers, switchable on the message
+- Follow-up suggestion chips after each answer (fail silently)
+- Conversation history with pin, rename, delete, and plain-text sharing
+- Markdown rendering: headings, lists, tables, code blocks, links, and emphasis, plus offline LaTeX and Mermaid diagrams
+
+**Providers**
+
+- Multiple saved OpenAI-compatible providers with a top-bar switcher
+- Configurable name, base URL, API key, and model, with a connection test
+- Collapsible model reasoning when the provider streams `reasoning_content`, with a settings toggle
+- Optional web search grounding, no API key required — a SearXNG-compatible endpoint if you configure one, otherwise a keyless fallback — toggled per conversation, with sources listed under the answer
+
+**Attachments and voice**
+
+- Image and text-file attachments — images are downscaled and sent as data-URL parts, text files are inlined as context
+- Voice input via `SpeechRecognizer` and voice output via TTS, with playback speed, auto-play, and per-message playback controls
+
+**Appearance**
+
+- System, light, and dark themes with a text-size setting
+- Time-of-day greeting on the home screen
 
 ## Architecture
+
+Single-module application built with Kotlin, Jetpack Compose (Material 3), Room, DataStore, OkHttp, and coroutines.
 
 ```text
 Compose UI
@@ -45,83 +54,67 @@ LLM Provider
 OpenAI-compatible API
 ```
 
-## Documentation
+## Requirements
 
-- `AGENTS.md` — development rules
-- `design.md` — visual and interaction specification
+- JDK 17 or newer (JDK 21 supported)
+- Android SDK with compileSdk 35
 
-## Building
+## Build and Test
 
-Requirements: JDK 17+ (JDK 21 compatible), Android SDK (compileSdk 35), Java 11 bytecode target (`JavaVersion.VERSION_11`).
-
-```text
-gradle :app:assembleDebug          # debug build
-gradle :app:testDebugUnitTest      # unit tests
-gradle :app:lintDebug              # lint
-gradle :app:assembleRelease        # minified release build
+```bash
+./gradlew :app:assembleDebug        # debug build
+./gradlew :app:testDebugUnitTest    # unit tests
+./gradlew :app:lintDebug            # lint
+./gradlew :app:assembleRelease      # minified release build
 ```
 
-The release build uses R8 minification and resource shrinking. It is produced
-unsigned — no signing configuration is included for V1. Add a signing config
-before installing a release build on a device.
+The release build applies R8 minification and resource shrinking and is produced unsigned. Add a signing configuration before installing or distributing it.
 
 ## Configuration
 
-- namespace: `com.assistant.app`
-- applicationId: `com.aistudio.inletchat.wzptbq`
-- minSdk: 26, targetSdk: 35
-- version: 1.0.0 (versionCode 1)
-- JVM Target: 11 (`sourceCompatibility = JavaVersion.VERSION_11`, `targetCompatibility = JavaVersion.VERSION_11`, `jvmTarget = 11`)
+| Setting | Value |
+| --- | --- |
+| Application ID | `com.aistudio.inletchat.wzptbq` |
+| Namespace | `com.assistant.app` |
+| minSdk / targetSdk | 26 / 35 |
+| Version | 1.0.0 (versionCode 1) |
+| JVM target | 11 |
 
-## Provider Configuration & Security
+## Security and Privacy
 
-In the app's settings screen, configure an OpenAI-compatible provider:
+- API keys are configured in the app's settings and stored locally in `EncryptedSharedPreferences` (`androidx.security.crypto`, backed by Android KeyStore AES-256-GCM, with `allowBackup=false`).
+- Keys are never logged, never written to plain DataStore or Room, and never committed to version control.
+- Keys are sent only to the configured provider endpoint over TLS/HTTPS.
+- The app contains no hardcoded provider keys, no analytics, and no third-party services.
 
-1. Set a display name, base URL (e.g. `https://api.openai.com/v1`), API key, and model.
-2. Use the connection test to verify the configuration before chatting.
-3. The API key is stored locally in `EncryptedSharedPreferences`
-   (`androidx.security.crypto` backed by Android KeyStore AES-256-GCM, with `allowBackup=false`).
-   It is never logged, never written to plain DataStore/Room, never committed to version control,
-   and only sent to the configured provider endpoint over TLS/HTTPS (or explicit local/loopback endpoints).
-4. **Security Notice**: Zero hardcoded provider keys are shipped. All provider access is strictly BYOK.
-   If any API keys or tokens were ever committed in prior development commits, they must be immediately
-   rotated and revoked at the respective provider's console.
+## Testing
 
-## Manual Device Verification
+The automated suite (unit and UI tests, lint) covers chat, streaming, stop/retry, version switching, follow-up suggestions, history pin/rename, provider configuration, appearance, error mapping, persistence, and voice state.
 
-This build environment had no Android device or emulator attached. The
-automated suite (unit/UI tests, lint) covers chat, streaming, stop/retry,
-version switching, suggestions, history pin/rename, provider configuration,
-appearance, error mapping, persistence, and voice state.
-The following items require a real device and remain:
+The following behaviors additionally require verification on a real device:
 
-**USER-SIDE VERIFICATION REQUIRED**
+<details>
+<summary>Manual device checklist</summary>
 
-- [ ] first launch
-- [ ] provider setup
-- [ ] normal response
-- [ ] long response
-- [ ] stop response
-- [ ] network disabled during generation
-- [ ] invalid API key
-- [ ] invalid endpoint
-- [ ] app backgrounded during generation
-- [ ] app restored after process death
-- [ ] conversation reopening
-- [ ] voice input
-- [ ] voice output
-- [ ] light theme
-- [ ] dark theme
-- [ ] keyboard behavior
+- [ ] First launch
+- [ ] Provider setup
+- [ ] Normal and long responses
+- [ ] Stop response
+- [ ] Network disabled during generation
+- [ ] Invalid API key
+- [ ] Invalid endpoint
+- [ ] App backgrounded during generation
+- [ ] App restored after process death
+- [ ] Conversation reopening
+- [ ] Voice input
+- [ ] Voice output
+- [ ] Light and dark themes
+- [ ] Keyboard behavior
 
-## Development
-
-Read `AGENTS.md` first, then `design.md` for UI work.
-
-Follow those documents before implementing features.
-
-Do not add features or architecture outside the documented scope without a clear product requirement.
+</details>
 
 ## Release
 
-A release is created only after the checklist in `AGENTS.md` passes, including real-device smoke testing.
+A release is cut only after the full release checklist passes, including real-device smoke testing.
+
+Pushing a tag matching `v*` (for example `v1.0.0`) triggers the release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml). The workflow runs the unit tests, builds the minified release APK, and publishes a GitHub release with the APK attached.
