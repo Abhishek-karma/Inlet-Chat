@@ -4,8 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Flat obsidian field so the teal mark stays the single focal point. -->
+    <!--
+        Quiet cool neutral, a step deeper than the app surface so the tile keeps
+        its edge on a light wallpaper. The deep teal mark reads at 5.6:1 on it,
+        and the mark is what carries the brand, not the field.
+    -->
     <path
         android:pathData="M 0,0 L 108,0 L 108,108 L 0,108 Z"
-        android:fillColor="#101414" />
+        android:fillColor="#EDF1F1" />
 </vector>

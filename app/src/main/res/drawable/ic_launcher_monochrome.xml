@@ -1,31 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Themed-icon (monochrome) variant. Identical 108dp geometry to foreground.
+    The system supplies the tint, so the mark is drawn in a single flat colour.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportHeight="108"
-    android:tint="#000000">
+    android:viewportHeight="108">
     <group
-        android:scaleX="1.8"
-        android:scaleY="1.8"
-        android:translateX="10.8"
-        android:translateY="10.8">
+        android:scaleX="2.4"
+        android:scaleY="2.4"
+        android:translateX="25.2"
+        android:translateY="25.2">
         <path
-            android:pathData="M 9.8,15 a 3.2,3.2 0 1,0 6.4,0 a 3.2,3.2 0 1,0 -6.4,0 Z"
+            android:pathData="M3,3 L9,3 L9,16 L15,16 L15,7 L21,7 L21,21 L3,21 Z"
             android:fillColor="#FFFFFF" />
-        <path
-            android:pathData="M 13,21 L 13,34"
-            android:strokeColor="#FFFFFF"
-            android:strokeWidth="6"
-            android:strokeLineCap="round" />
-        <path
-            android:pathData="M 24,14 L 24,34 L 35,34"
-            android:strokeColor="#FFFFFF"
-            android:strokeWidth="6"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round" />
     </group>
 </vector>
