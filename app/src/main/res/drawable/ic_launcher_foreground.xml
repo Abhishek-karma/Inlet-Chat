@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Inlet Custom Adaptive Launcher Foreground -->
+    <!--
+        The mark is drawn in a 48-unit canvas with its own padding, so it is
+        scaled up here to fill the adaptive icon's 66dp safe area.
+    -->
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_inlet_logo"
+        android:drawable="@drawable/ic_launcher_foreground_mark"
         android:gravity="center" />
 </layer-list>

@@ -21,6 +21,9 @@ import com.assistant.app.ui.theme.ChatTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The activity launches with the splash theme so the window shows the
+        // mark; switch to the real theme before the first frame is drawn.
+        setTheme(R.style.Theme_InletChat)
         super.onCreate(savedInstanceState)
         // Target SDK 35 enforces edge-to-edge; enable it on older versions too
         // so inset handling is identical everywhere.

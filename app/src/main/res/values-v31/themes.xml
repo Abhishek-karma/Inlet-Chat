@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12+ draws its own splash from these attributes and applies a
+        circular mask to the icon, so the mark is given extra padding: the
+        system scales the icon up to 2/3 of the screen and crops to a circle.
+    -->
+    <style name="Theme.InletChat.Splash" parent="Theme.InletChat">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

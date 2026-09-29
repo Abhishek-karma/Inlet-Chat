@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launch window shown while the process starts. The background matches the
+    app surface in each mode so there is no colour flash before Compose draws,
+    and the mark is centred. Only visible for the launch frame.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item android:drawable="@drawable/ic_inlet_logo" android:gravity="center" />
+</layer-list>

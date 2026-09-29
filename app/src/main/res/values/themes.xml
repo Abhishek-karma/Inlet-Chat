@@ -5,5 +5,12 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+    <!--
+        Launch theme. Shown only for the launch frame: the activity switches to
+        Theme.InletChat in MainActivity before the first frame is drawn.
+    -->
+    <style name="Theme.InletChat.Splash" parent="Theme.InletChat">
+        <item name="android:windowBackground">@drawable/launch_splash</item>
+    </style>
     <style name="Theme.Nara" parent="Theme.InletChat" />
 </resources>

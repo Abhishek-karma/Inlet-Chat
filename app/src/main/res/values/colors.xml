@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#101414</color>
+    <!-- Matches the app surface in each mode so the launch window does not
+         flash a different colour before Compose draws. -->
+    <color name="splash_background">#FAFBFB</color>
 </resources>
