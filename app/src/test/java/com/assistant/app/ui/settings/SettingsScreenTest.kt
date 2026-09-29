@@ -30,6 +30,7 @@ import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -94,12 +95,26 @@ class SettingsScreenTest {
             .any { !it.config.contains(SemanticsProperties.Disabled) }
 
     /**
-     * Opens one settings sub-page from the root menu. Settings is a menu of
-     * areas, so a test that exercises one area has to navigate to it first.
+     * Opens one settings sub-page from the root menu. The menu is grouped and
+     * scrolls, so a row below the fold has to be scrolled into view first:
+     * touch injection outside the window silently does nothing.
      */
     private fun openPage(sectionLabel: String) {
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(sectionLabel))
         composeRule.onNodeWithText(sectionLabel).performClick()
         composeRule.waitForIdle()
+    }
+
+    /**
+     * Scrolls a sub-page to [titleRes] and asserts it. Page section headers are
+     * rendered upper case, so the match is case-insensitive.
+     */
+    private fun assertSectionOnPage(titleRes: Int) {
+        val title = context.getString(titleRes)
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(title, ignoreCase = true))
+        composeRule.onNodeWithText(title, ignoreCase = true).assertIsDisplayed()
     }
 
     /** Waits until the add/edit editor's name field is on screen. */
@@ -206,6 +221,8 @@ class SettingsScreenTest {
         openPage(context.getString(R.string.settings_section_about))
         val versionLabel = context.getString(R.string.settings_version)
         composeRule.onNodeWithText(versionLabel).assertIsDisplayed()
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText("1.0.0"))
         composeRule.onNodeWithText("1.0.0").assertIsDisplayed()
     }
 
@@ -238,5 +255,135 @@ class SettingsScreenTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.settings_voice_output))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun everyAreaIsReachableFromTheMenu() {
+        setContent()
+        listOf(
+            R.string.settings_section_provider,
+            R.string.settings_section_voice,
+            R.string.settings_section_appearance,
+            R.string.settings_section_search,
+            R.string.settings_section_privacy,
+            R.string.settings_section_help,
+            R.string.settings_section_terms,
+            R.string.settings_section_licenses,
+            R.string.settings_section_about,
+        ).forEach { area ->
+            composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(context.getString(area)))
+            composeRule.onNodeWithText(context.getString(area)).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun privacyPageStatesWhatTheAppActuallyDoes() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_privacy))
+
+        listOf(
+            R.string.privacy_provider_title,
+            R.string.privacy_analytics_title,
+            R.string.privacy_deletion_title,
+        ).forEach { assertSectionOnPage(it) }
+        assertSectionOnPage(R.string.privacy_provider_body)
+    }
+
+    @Test
+    fun legalGapsAreMarkedNotFinished() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_privacy))
+        assertSectionOnPage(R.string.legal_todo_label)
+        assertSectionOnPage(R.string.legal_todo_privacy)
+    }
+
+    @Test
+    fun termsPageCoversByokAndThirdPartyProviders() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_terms))
+        assertSectionOnPage(R.string.terms_byok_title)
+        assertSectionOnPage(R.string.terms_providers_title)
+        assertSectionOnPage(R.string.terms_cost_title)
+        assertSectionOnPage(R.string.legal_todo_terms)
+    }
+
+    @Test
+    fun helpPageExplainsProviderSetupAndFailures() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_help))
+        listOf(
+            R.string.help_add_provider_title,
+            R.string.help_api_key_title,
+            R.string.help_invalid_key_title,
+            R.string.help_endpoint_title,
+            R.string.help_voice_title,
+        ).forEach { assertSectionOnPage(it) }
+    }
+
+    @Test
+    fun aboutPageLinksToPrivacyTermsHelpAndLicenses() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_about))
+        listOf(
+            R.string.settings_about_privacy,
+            R.string.settings_about_terms,
+            R.string.settings_about_help,
+            R.string.settings_about_licenses,
+        ).forEach { assertSectionOnPage(it) }
+    }
+
+    @Test
+    fun licensesPageShowsTheGeneratedList() {
+        setContent()
+        val asset = ApplicationProvider.getApplicationContext<Context>()
+            .assets.open("licenses.txt")
+            .bufferedReader()
+            .use { it.readText() }
+        val expectedCount = LibraryLicenses.parse(asset).size
+        assertTrue("The build should generate at least one license entry", expectedCount > 0)
+
+        openPage(context.getString(R.string.settings_section_licenses))
+        composeRule.onNodeWithText(context.getString(R.string.licenses_intro)).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.licenses_count, expectedCount),
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun providerListMarksTheActiveProviderAndInvitesSwitching() {
+        setContent()
+        runBlocking {
+            providerStore.addProvider(
+                ProviderDraft(name = "First", baseUrl = "https://a.example/v1", model = "m1"),
+                "sk-1",
+            )
+            providerStore.addProvider(
+                ProviderDraft(name = "Second", baseUrl = "https://b.example/v1", model = "m2"),
+                "sk-2",
+            )
+        }
+        openPage(context.getString(R.string.settings_section_provider))
+
+        composeRule.onNodeWithText("First").assertIsDisplayed()
+        composeRule.onNodeWithText("Second").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_provider_active))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.settings_provider_inactive))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun validationErrorsNameTheProblemAndTheNextStep() {
+        listOf(
+            ProviderStore.ERROR_NAME_REQUIRED,
+            ProviderStore.ERROR_BASE_URL_INVALID,
+            ProviderStore.ERROR_MODEL_REQUIRED,
+            ProviderStore.ERROR_API_KEY_REQUIRED,
+        ).forEach { message ->
+            assertTrue(
+                "Validation message should be more than a bare field name: $message",
+                message.length > 30,
+            )
+        }
     }
 }

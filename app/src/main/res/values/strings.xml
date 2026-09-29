@@ -93,7 +93,6 @@
     <string name="settings_provider_none">No provider yet. Add one to start chatting.</string>
     <string name="settings_add_provider">Add provider</string>
     <string name="settings_quick_presets">Quick presets</string>
-    <string name="settings_active">Active</string>
     <string name="settings_delete">Delete</string>
     <string name="settings_cancel">Cancel</string>
     <string name="cd_set_active">Set as active provider</string>
@@ -205,4 +204,102 @@
     <string name="settings_not_configured">Not set</string>
     <string name="settings_configured">Configured</string>
     <string name="settings_not_available">Unavailable</string>
+
+    <!-- Settings groups -->
+    <string name="settings_group_ai">AI</string>
+    <string name="settings_group_chat">Chat</string>
+    <string name="settings_group_data">Data &amp; privacy</string>
+    <string name="settings_group_search">Search</string>
+    <string name="settings_group_support">Support</string>
+    <string name="settings_group_about">About</string>
+    <string name="legal_todo_header">Before release</string>
+    <string name="legal_todo_label">Needs publisher input</string>
+
+    <!-- Provider setup -->
+    <string name="settings_provider_inactive">Tap to use</string>
+    <string name="settings_provider_active">In use</string>
+    <string name="settings_provider_no_model">No model set</string>
+    <string name="settings_provider_setup_guide">Getting an API key</string>
+    <string name="settings_guide_step_1">Open the provider\'s API key page.</string>
+    <string name="settings_guide_step_2">Sign in or create an account.</string>
+    <string name="settings_guide_step_3">Create a new key and copy it.</string>
+    <string name="settings_guide_step_4">Paste it into the API key field above.</string>
+    <string name="settings_guide_step_5">Choose a model, test the connection, then save.</string>
+    <string name="settings_guide_key_use">Inlet Chat stores the key on this device in encrypted storage and sends it only to the provider endpoint you configure. Anyone with access to the unlocked device can read it, so treat it like a password.</string>
+    <string name="settings_guide_open_page">Open provider page</string>
+    <string name="settings_guide_close">Close</string>
+    <string name="settings_guide_own_endpoint">This endpoint is not one of the presets. Get the key and the base URL from whoever operates this service.</string>
+
+    <!-- About -->
+    <string name="settings_about_description">A private, bring-your-own-key AI chat client. Conversations stay in this app\'s storage on your device; answers come from the provider you configure.</string>
+    <string name="settings_about_privacy">Privacy policy</string>
+    <string name="settings_about_terms">Terms of service</string>
+    <string name="settings_about_licenses">Open source licenses</string>
+    <string name="settings_about_help">Help &amp; support</string>
+
+    <!-- Privacy policy -->
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="privacy_intro">This page describes what this app actually does with your data, based on the code in this build.</string>
+    <string name="privacy_local_title">Stored on this device</string>
+    <string name="privacy_local_body">• Conversations, messages, and attachment references are stored in the app\'s own database.\n• Attached images and text files are copied into the app\'s private files directory. Images are downscaled when they are added.\n• Preferences such as theme, text size, voice, and the web search service are stored locally.\n• API keys are stored in encrypted preferences backed by the Android keystore. Android backup is turned off for this app, so keys are not copied to a device backup.</string>
+    <string name="privacy_provider_title">Sent to your AI provider</string>
+    <string name="privacy_provider_body">When you send a message, the app sends it, the conversation context, your selected model, and your API key to the provider endpoint you configured. Attached images are sent as image data; attached text files are inlined into the message. Responses stream back. Inlet Chat has no server in between: the provider receives the request directly from your device, and that provider\'s own retention and training practices apply to it.</string>
+    <string name="privacy_search_title">Web search</string>
+    <string name="privacy_search_body">If you turn on web search, the search text is sent to the search service URL configured in Settings, and the pages it returns are fetched so their text can be used as context. That service and the fetched sites are third parties.</string>
+    <string name="privacy_voice_title">Voice</string>
+    <string name="privacy_voice_body">Voice input uses Android\'s speech recognition and voice output uses the system text-to-speech engine. Whether recognition happens on the device or through the device manufacturer\'s service depends on the recognizer your device provides, which this app does not control. Audio is only captured while the microphone button is in use.</string>
+    <string name="privacy_analytics_title">Analytics and third-party SDKs</string>
+    <string name="privacy_analytics_body">This build contains no analytics, advertising, or crash-reporting SDK. The only network destinations are the provider endpoint, the configured search service, and pages reached through web search.</string>
+    <string name="privacy_deletion_title">Deleting your data</string>
+    <string name="privacy_deletion_body">Deleting a conversation in History removes its messages and its copied attachment files from the device. Deleting a provider removes its stored key. Uninstalling the app removes its private storage. Data already sent to a third-party provider or search service is outside this app\'s control — use that provider\'s own deletion tools.</string>
+    <string name="legal_todo_privacy">TODO(legal): the publishing entity, contact address, jurisdiction, and any required sub-processor or retention details are not defined in this project and must be completed by the publisher before release.</string>
+
+    <!-- Terms of service -->
+    <string name="settings_section_terms">Terms</string>
+    <string name="terms_intro">These terms cover your use of Inlet Chat. They describe the product as built and have not been reviewed by a lawyer.</string>
+    <string name="terms_byok_title">You provide the API key</string>
+    <string name="terms_byok_body">Inlet Chat has no model of its own. You supply credentials for a third-party AI provider, you are responsible for that key, and you must have the provider\'s permission to use it. Revoke the key at the provider if you stop using it.</string>
+    <string name="terms_providers_title">Third-party providers</string>
+    <string name="terms_providers_body">Answers, model names, availability, and data handling are determined by the provider you configure. Inlet Chat does not control them and does not guarantee their output, accuracy, or uptime.</string>
+    <string name="terms_cost_title">Costs</string>
+    <string name="terms_cost_body">Usage is billed by your provider, not by this app. Inlet Chat makes no payments and sets no limits on your provider account. You are responsible for any charges your usage incurs.</string>
+    <string name="terms_content_title">AI-generated content</string>
+    <string name="terms_content_body">Model output can be wrong, biased, or harmful. Do not rely on it for medical, legal, financial, or safety-critical decisions, and review anything you act on.</string>
+    <string name="terms_search_title">Web search limits</string>
+    <string name="terms_search_body">Search results come from third-party services and pages. They may be incomplete, out of date, or blocked, and the app may refuse to fetch some addresses. Verify important claims at the source.</string>
+    <string name="terms_availability_title">Availability</string>
+    <string name="terms_availability_body">The app is provided as is, without warranty. Features may change or be removed, and the app may be discontinued at any time.</string>
+    <string name="terms_conduct_title">Your responsibility</string>
+    <string name="terms_conduct_body">You are responsible for the content you send, for complying with your provider\'s terms, and for the law that applies to your use.</string>
+    <string name="legal_todo_terms">TODO(legal): publisher identity, governing law, jurisdiction, liability limits, and a contact address are not defined in this project and must be completed by the publisher before release.</string>
+
+    <!-- Open source licenses -->
+    <string name="settings_section_licenses">Licenses</string>
+    <string name="licenses_intro">Libraries bundled in this build, generated from the app\'s Gradle dependencies. Tap a library to read its license.</string>
+    <string name="licenses_unavailable">License information is not available in this build.</string>
+    <string name="licenses_count">%1$d libraries</string>
+
+    <!-- Help & support -->
+    <string name="settings_section_help">Help</string>
+    <string name="help_intro">Short answers for the things that usually go wrong. Inlet Chat has no account system, so everything below is something you configure yourself.</string>
+    <string name="help_add_provider_title">Add a provider</string>
+    <string name="help_add_provider_body">Open Settings → Provider → Add provider. Pick a preset to fill the name, endpoint, and a starting model, paste your API key, run Test connection, then Save. The first provider you save becomes the active one.</string>
+    <string name="help_api_key_title">Where to get an API key</string>
+    <string name="help_api_key_body">Sign in to your provider\'s developer console, create a key, and copy it. Keys are created and revoked on the provider\'s side, never in this app.</string>
+    <string name="help_test_title">Test the connection</string>
+    <string name="help_test_body">Test connection sends a single short message using the values currently in the form. It reports whether the endpoint, key, and model work before you save.</string>
+    <string name="help_invalid_key_title">\"API key was rejected\"</string>
+    <string name="help_invalid_key_body">The provider refused the key. Check for a missing or extra character, that the key is still active, and that it belongs to the provider whose endpoint you entered. Create a new key if in doubt.</string>
+    <string name="help_endpoint_title">Connection and endpoint errors</string>
+    <string name="help_endpoint_body">\"Unable to connect\" means the request never reached the provider — check your network and that the base URL is correct and starts with https://. \"Provider is unavailable\" or a timeout means the provider returned an error or did not answer in time; try again later. The base URL is the API root, usually ending in /v1.</string>
+    <string name="help_model_title">Model not found or no model list</string>
+    <string name="help_model_body">The model name is sent exactly as you type it. The model list comes from the provider and needs a working key and base URL; if it cannot load, type the model name your provider documents.</string>
+    <string name="help_voice_title">Voice problems</string>
+    <string name="help_voice_body">Voice output needs a text-to-speech engine installed — Google Speech Services is the usual one. Voice input needs the microphone permission and a working recognizer; some devices recognise speech only through a network service. If voice output is marked unavailable in Settings, the device has no engine.</string>
+    <string name="help_attachments_title">Attachment problems</string>
+    <string name="help_attachments_body">Images and text files are copied into the app when added. Large images are downscaled, and unsupported file types are rejected. If an image is not recognised, try a PNG or JPEG. Text files are inlined into your message, so very long files make for very long requests.</string>
+    <string name="help_search_title">Web search problems</string>
+    <string name="help_search_body">Web search needs a search service URL in Settings → Web search and must be toggled on in the conversation. If Test search fails, the service is unreachable or blocked; try the default service or another instance. Answers still work without search.</string>
+    <string name="help_contact_title">Report a problem</string>
+    <string name="help_contact_body">TODO(support): no issue tracker, support address, or community link is defined for this project. Add a real destination here before release — do not ship a placeholder address.</string>
 </resources>

@@ -135,11 +135,12 @@ class ProviderStore(
 
     companion object {
         // User-facing and single-locale; not in resources because validate()
-        // is context-free.
-        const val ERROR_NAME_REQUIRED = "Name is required."
-        const val ERROR_BASE_URL_INVALID = "Base URL must start with http(s)://"
-        const val ERROR_MODEL_REQUIRED = "Model is required."
-        const val ERROR_API_KEY_REQUIRED = "API key is required."
+        // is context-free. Each message names the field and what to do, so the
+        // editor can show it directly under the form.
+        const val ERROR_NAME_REQUIRED = "Give this provider a name, so you can tell it apart in the list."
+        const val ERROR_BASE_URL_INVALID = "The base URL must start with http:// or https://, for example https://api.openai.com/v1."
+        const val ERROR_MODEL_REQUIRED = "Enter a model name. It is sent to the provider exactly as typed."
+        const val ERROR_API_KEY_REQUIRED = "Enter the API key for this provider. Leave the field empty only when you are keeping a key you already saved."
 
         private const val DEFAULT_NAME = "Provider"
     }

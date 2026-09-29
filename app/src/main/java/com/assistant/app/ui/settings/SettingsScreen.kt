@@ -1,6 +1,8 @@
 package com.assistant.app.ui.settings
 
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -91,12 +94,61 @@ internal const val SettingsBaseUrlFieldTag = "settings_base_url_field"
 internal const val SettingsApiKeyFieldTag = "settings_api_key_field"
 internal const val SettingsModelFieldTag = "settings_model_field"
 
-private enum class SettingsPage(val titleRes: Int, val icon: Int) {
-    Provider(R.string.settings_section_provider, AppIcons.Sparkle),
-    Voice(R.string.settings_section_voice, AppIcons.Speak),
-    Search(R.string.settings_section_search, AppIcons.Globe),
-    Appearance(R.string.settings_section_appearance, AppIcons.Palette),
-    About(R.string.settings_section_about, AppIcons.Info),
+private const val LICENSES_ASSET = "licenses.txt"
+
+internal data class LegalSection(val titleRes: Int, val bodyRes: Int)
+
+private val PRIVACY_SECTIONS = listOf(
+    LegalSection(R.string.privacy_local_title, R.string.privacy_local_body),
+    LegalSection(R.string.privacy_provider_title, R.string.privacy_provider_body),
+    LegalSection(R.string.privacy_search_title, R.string.privacy_search_body),
+    LegalSection(R.string.privacy_voice_title, R.string.privacy_voice_body),
+    LegalSection(R.string.privacy_analytics_title, R.string.privacy_analytics_body),
+    LegalSection(R.string.privacy_deletion_title, R.string.privacy_deletion_body),
+)
+
+private val TERMS_SECTIONS = listOf(
+    LegalSection(R.string.terms_byok_title, R.string.terms_byok_body),
+    LegalSection(R.string.terms_providers_title, R.string.terms_providers_body),
+    LegalSection(R.string.terms_cost_title, R.string.terms_cost_body),
+    LegalSection(R.string.terms_content_title, R.string.terms_content_body),
+    LegalSection(R.string.terms_search_title, R.string.terms_search_body),
+    LegalSection(R.string.terms_availability_title, R.string.terms_availability_body),
+    LegalSection(R.string.terms_conduct_title, R.string.terms_conduct_body),
+)
+
+private val HELP_SECTIONS = listOf(
+    LegalSection(R.string.help_add_provider_title, R.string.help_add_provider_body),
+    LegalSection(R.string.help_api_key_title, R.string.help_api_key_body),
+    LegalSection(R.string.help_test_title, R.string.help_test_body),
+    LegalSection(R.string.help_invalid_key_title, R.string.help_invalid_key_body),
+    LegalSection(R.string.help_endpoint_title, R.string.help_endpoint_body),
+    LegalSection(R.string.help_model_title, R.string.help_model_body),
+    LegalSection(R.string.help_voice_title, R.string.help_voice_body),
+    LegalSection(R.string.help_attachments_title, R.string.help_attachments_body),
+    LegalSection(R.string.help_search_title, R.string.help_search_body),
+    LegalSection(R.string.help_contact_title, R.string.help_contact_body),
+)
+
+private enum class SettingsGroup(val titleRes: Int) {
+    Ai(R.string.settings_group_ai),
+    Chat(R.string.settings_group_chat),
+    Search(R.string.settings_group_search),
+    Data(R.string.settings_group_data),
+    Support(R.string.settings_group_support),
+    About(R.string.settings_group_about),
+}
+
+private enum class SettingsPage(val titleRes: Int, val icon: Int, val group: SettingsGroup) {
+    Provider(R.string.settings_section_provider, AppIcons.Sparkle, SettingsGroup.Ai),
+    Voice(R.string.settings_section_voice, AppIcons.Speak, SettingsGroup.Chat),
+    Appearance(R.string.settings_section_appearance, AppIcons.Palette, SettingsGroup.Chat),
+    Search(R.string.settings_section_search, AppIcons.Globe, SettingsGroup.Search),
+    Privacy(R.string.settings_section_privacy, AppIcons.Info, SettingsGroup.Data),
+    Help(R.string.settings_section_help, AppIcons.Chat, SettingsGroup.Support),
+    Terms(R.string.settings_section_terms, AppIcons.Flag, SettingsGroup.About),
+    Licenses(R.string.settings_section_licenses, AppIcons.Flag, SettingsGroup.About),
+    About(R.string.settings_section_about, AppIcons.Info, SettingsGroup.About),
 }
 
 /**
@@ -173,7 +225,11 @@ fun SettingsScreen(
                         SettingsPage.Voice -> VoicePage(state = state, viewModel = viewModel)
                         SettingsPage.Search -> SearchPage(state = state, viewModel = viewModel)
                         SettingsPage.Appearance -> AppearancePage(state = state, viewModel = viewModel)
-                        SettingsPage.About -> AboutPage(versionName = versionName)
+                        SettingsPage.About -> AboutPage(versionName = versionName) { page = it }
+                        SettingsPage.Privacy -> LegalPage(R.string.privacy_intro, PRIVACY_SECTIONS)
+                        SettingsPage.Help -> LegalPage(R.string.help_intro, HELP_SECTIONS)
+                        SettingsPage.Terms -> LegalPage(R.string.terms_intro, TERMS_SECTIONS)
+                        SettingsPage.Licenses -> LicensesPage()
                     }
                     Spacer(Modifier.height(AppSpacing.xxl))
                 }
@@ -188,15 +244,21 @@ private fun SettingsMenu(
     versionName: String,
     onOpen: (SettingsPage) -> Unit,
 ) {
-    SettingsCard {
-        SettingsPage.entries.forEachIndexed { index, page ->
-            if (index > 0) SettingsDivider()
-            SettingsRow(
-                label = stringResource(page.titleRes),
-                icon = page.icon,
-                value = settingsPageSummary(page, state, versionName),
-                onClick = { onOpen(page) },
-            )
+    SettingsGroup.entries.forEachIndexed { groupIndex, group ->
+        val pages = SettingsPage.entries.filter { it.group == group }
+        if (pages.isEmpty()) return@forEachIndexed
+        if (groupIndex > 0) Spacer(Modifier.height(AppSpacing.lg))
+        SettingsSectionHeader(text = stringResource(group.titleRes), isFirst = groupIndex == 0)
+        SettingsCard {
+            pages.forEachIndexed { index, page ->
+                if (index > 0) SettingsDivider()
+                SettingsRow(
+                    label = stringResource(page.titleRes),
+                    icon = page.icon,
+                    value = settingsPageSummary(page, state, versionName),
+                    onClick = { onOpen(page) },
+                )
+            }
         }
     }
 }
@@ -206,7 +268,7 @@ private fun settingsPageSummary(
     page: SettingsPage,
     state: SettingsUiState,
     versionName: String,
-): String = when (page) {
+): String? = when (page) {
     SettingsPage.Provider ->
         state.providers.firstOrNull { it.isActive }?.name
             ?: stringResource(R.string.settings_not_configured)
@@ -233,6 +295,10 @@ private fun settingsPageSummary(
         },
     )
     SettingsPage.About -> versionName
+    SettingsPage.Privacy,
+    SettingsPage.Help,
+    SettingsPage.Terms,
+    SettingsPage.Licenses -> null
 }
 
 @Composable
@@ -564,7 +630,8 @@ private fun AppearancePage(state: SettingsUiState, viewModel: SettingsViewModel)
 }
 
 @Composable
-private fun AboutPage(versionName: String) {
+private fun AboutPage(versionName: String, onOpen: (SettingsPage) -> Unit) {
+    SettingsSectionHeader(text = stringResource(R.string.app_name), isFirst = true)
     SettingsCard {
         Row(
             modifier = Modifier
@@ -587,37 +654,210 @@ private fun AboutPage(versionName: String) {
                 )
             }
             Spacer(Modifier.width(AppSpacing.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                )
-                Text(
-                    text = "Fluid intelligence, pure connection",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            )
         }
-        SettingsDivider()
-        Row(
+        Text(
+            text = stringResource(R.string.settings_about_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = AppSpacing.lg, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+                .padding(start = AppSpacing.lg, end = AppSpacing.lg, bottom = AppSpacing.md),
+        )
+        SettingsDivider()
+        SettingsRow(
+            label = stringResource(R.string.settings_version),
+            icon = AppIcons.Info,
+            value = versionName,
+        )
+    }
+
+    SettingsSectionHeader(text = stringResource(R.string.settings_group_data))
+    SettingsCard {
+        SettingsNavRow(
+            label = stringResource(R.string.settings_about_privacy),
+            icon = AppIcons.Info,
+            onClick = { onOpen(SettingsPage.Privacy) },
+        )
+        SettingsDivider()
+        SettingsNavRow(
+            label = stringResource(R.string.settings_about_terms),
+            icon = AppIcons.Flag,
+            onClick = { onOpen(SettingsPage.Terms) },
+        )
+    }
+
+    SettingsSectionHeader(text = stringResource(R.string.settings_group_support))
+    SettingsCard {
+        SettingsNavRow(
+            label = stringResource(R.string.settings_about_help),
+            icon = AppIcons.Chat,
+            onClick = { onOpen(SettingsPage.Help) },
+        )
+        SettingsDivider()
+        SettingsNavRow(
+            label = stringResource(R.string.settings_about_licenses),
+            icon = AppIcons.Flag,
+            onClick = { onOpen(SettingsPage.Licenses) },
+        )
+    }
+}
+
+/**
+ * One heading, one block of text per [LegalSection]. Sections are plain
+ * scrolling text, not cards, so a long policy stays readable.
+ */
+@Composable
+private fun LegalPage(introRes: Int, sections: List<LegalSection>) {
+    Text(
+        text = stringResource(introRes),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    sections.forEach { section ->
+        SettingsSectionHeader(text = stringResource(section.titleRes))
+        Text(
+            text = stringResource(section.bodyRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    SettingsSectionHeader(text = stringResource(R.string.legal_todo_header))
+    SettingsCard {
+        SettingsRow(
+            label = stringResource(R.string.legal_todo_label),
+            icon = AppIcons.Flag,
+            description = stringResource(
+                if (sections === TERMS_SECTIONS) R.string.legal_todo_terms else R.string.legal_todo_privacy,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun LicensesPage() {
+    val context = LocalContext.current
+    val text = remember {
+        runCatching {
+            context.assets.open(LICENSES_ASSET).bufferedReader().use { it.readText() }
+        }.getOrNull()
+    }
+    Text(
+        text = stringResource(R.string.licenses_intro),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (text == null) {
+        Text(
+            text = stringResource(R.string.licenses_unavailable),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        return
+    }
+    val entries = remember(text) { LibraryLicenses.parse(text) }
+    Text(
+        text = stringResource(R.string.licenses_count, entries.size),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    entries.forEach { entry ->
+        SettingsSectionHeader(text = entry.name)
+        if (entry.license.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.settings_version),
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = versionName,
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = AppCodeFontFamily),
+                text = entry.license,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = AppCodeFontFamily),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+}
+
+/**
+ * How to get an API key for the endpoint in the form. A known preset links to
+ * that provider's own key page; an unknown endpoint says so instead of
+ * guessing a URL.
+ */
+@Composable
+private fun ProviderGuideDialog(preset: ProviderPreset?, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_provider_setup_guide)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+            ) {
+                listOf(
+                    R.string.settings_guide_step_1,
+                    R.string.settings_guide_step_2,
+                    R.string.settings_guide_step_3,
+                    R.string.settings_guide_step_4,
+                    R.string.settings_guide_step_5,
+                ).forEachIndexed { index, step ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = "${index + 1}.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(20.dp),
+                        )
+                        Text(
+                            text = stringResource(step),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Text(
+                    text = stringResource(R.string.settings_guide_key_use),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (preset == null) {
+                    Text(
+                        text = stringResource(R.string.settings_guide_own_endpoint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (preset != null) {
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(preset.keyUrl)),
+                            )
+                        }
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.settings_guide_open_page))
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.settings_guide_close))
+                }
+            }
+        },
+        dismissButton = if (preset != null) {
+            {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.settings_guide_close))
+                }
+            }
+        } else {
+            null
+        },
+        shape = AppShape.medium,
+    )
 }
 
 @Composable
@@ -662,31 +902,35 @@ private fun ProviderRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = AppSpacing.lg),
+                .padding(start = AppSpacing.md, end = AppSpacing.md),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = provider.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (provider.isActive) {
-                    Text(
-                        text = " · " + stringResource(R.string.settings_active),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
             Text(
-                text = provider.model,
+                text = provider.name,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = provider.model.ifBlank {
+                    stringResource(R.string.settings_provider_no_model)
+                },
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = AppCodeFontFamily),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        Text(
+            text = stringResource(
+                if (provider.isActive) R.string.settings_provider_active else R.string.settings_provider_inactive,
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (provider.isActive) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
         Icon(
             painter = painterResource(AppIcons.ChevronRight),
             contentDescription = null,
@@ -696,6 +940,7 @@ private fun ProviderRow(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ProviderEditor(
     state: SettingsUiState,
@@ -715,27 +960,28 @@ private fun ProviderEditor(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 2.dp, bottom = AppSpacing.xs),
                 )
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
                 ) {
-                    listOf(
-                        Triple("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
-                        Triple("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini"),
-                        Triple("Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
-                        Triple("Naga", "https://api.naga.ac/v1", "dots-3-note-preview:free"),
-                    ).forEach { (presetName, url, defaultModel) ->
+                    ProviderPresets.forEach { preset ->
                         Surface(
-                            onClick = { viewModel.fillPreset(presetName, url, defaultModel) },
+                            onClick = {
+                                viewModel.fillPreset(preset.name, preset.baseUrl, preset.defaultModel)
+                            },
                             shape = AppShape.pill,
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            ),
                         ) {
                             Text(
-                                text = presetName,
+                                text = preset.name,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             )
                         }
                     }
@@ -800,6 +1046,18 @@ private fun ProviderEditor(
                 .testTag(SettingsApiKeyFieldTag),
             enabled = !state.isSaving,
         )
+        var guideOpen by remember { mutableStateOf(false) }
+        SettingsNavRow(
+            label = stringResource(R.string.settings_provider_setup_guide),
+            icon = AppIcons.Info,
+            onClick = { guideOpen = true },
+        )
+        if (guideOpen) {
+            ProviderGuideDialog(
+                preset = presetForBaseUrl(state.baseUrl),
+                onDismiss = { guideOpen = false },
+            )
+        }
         var modelSelectorOpen by remember { mutableStateOf(false) }
         OutlinedTextField(
             value = state.model,
@@ -1057,6 +1315,52 @@ private fun SettingsRow(
                 modifier = Modifier.size(16.dp),
             )
         }
+    }
+}
+
+/** A row that opens another settings page; mirrors [SettingsRow]'s look. */
+@Composable
+private fun SettingsNavRow(
+    label: String,
+    icon: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(onClickLabel = label, onClick = onClick)
+            .padding(horizontal = AppSpacing.md, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = AppSpacing.md),
+        )
+        Icon(
+            painter = painterResource(AppIcons.ChevronRight),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
