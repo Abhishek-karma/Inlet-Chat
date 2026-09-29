@@ -1,12 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!--
-        The mark is drawn in a 48-unit canvas with its own padding, so it is
-        scaled up here to fill the adaptive icon's 66dp safe area.
-    -->
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/ic_launcher_foreground_mark"
-        android:gravity="center" />
-</layer-list>
+<!--
+    Canonical Adaptive Icon Foreground: 108dp x 108dp canvas.
+    Artwork is scaled to 1.8x and centered at (54, 54),
+    fitting completely inside the inner 66dp diameter safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.8"
+        android:scaleY="1.8"
+        android:translateX="10.8"
+        android:translateY="10.8">
+        <path
+            android:pathData="M 9.8,15 a 3.2,3.2 0 1,0 6.4,0 a 3.2,3.2 0 1,0 -6.4,0 Z"
+            android:fillColor="#2DD4BF" />
+        <path
+            android:pathData="M 13,21 L 13,34"
+            android:strokeColor="#2DD4BF"
+            android:strokeWidth="6"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M 24,14 L 24,34 L 35,34"
+            android:strokeColor="#2DD4BF"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

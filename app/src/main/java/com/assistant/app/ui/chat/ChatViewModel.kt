@@ -77,6 +77,13 @@ class ChatViewModel(
             initialValue = emptyList(),
         )
 
+    val savedProviders: StateFlow<List<ProviderEntity>> = providers
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
+
     val isVoiceInputAvailable: Boolean get() = voiceHandler.isVoiceInputAvailable
     val attachmentSupport: Boolean get() = attachmentIngester != null
     val searchAvailable: StateFlow<Boolean> = searchConfigured

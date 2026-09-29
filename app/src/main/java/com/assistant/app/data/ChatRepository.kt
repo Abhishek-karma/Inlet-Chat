@@ -49,7 +49,9 @@ class ChatRepository(
     internal val attachmentsDir: File? = null,
     webSearch: (suspend (String) -> SearchOutcome?)? = null,
 ) {
-    private val _uiState = MutableStateFlow(ChatUiState())
+    private val _uiState = MutableStateFlow(
+        ChatUiState(needsSetup = chatLlm.value is ChatLlmState.NeedsSetup),
+    )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private val attachmentManager = AttachmentManager(attachmentsDir)

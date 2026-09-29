@@ -1,11 +1,16 @@
 package com.assistant.app.ui
 
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -74,7 +79,14 @@ fun AssistantNavHost(
     // the write to come back round.
     var finishedOnboarding by rememberSaveable { mutableStateOf(false) }
 
-    if (onboardingDone == null) return
+    if (onboardingDone == null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        )
+        return
+    }
 
     if (!onboardingDone!! && !finishedOnboarding) {
         OnboardingScreen(
@@ -96,9 +108,13 @@ fun AssistantNavHost(
         navController = navController,
         startDestination = CHAT_ROUTE,
         modifier = modifier,
-        // Subtle motion communicates hierarchy, not style.
+        // Startup should be rock-solid and stationary; transitions only apply when entering from another route.
         enterTransition = {
-            fadeIn(navFade) + slideInVertically(navSlide) { it / 12 }
+            if (initialState.destination.route == null) {
+                EnterTransition.None
+            } else {
+                fadeIn(navFade) + slideInVertically(navSlide) { it / 12 }
+            }
         },
         exitTransition = { fadeOut(navFadeFast) },
         popEnterTransition = { fadeIn(navFade) },

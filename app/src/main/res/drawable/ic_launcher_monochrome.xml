@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Themed-icon (monochrome) variant. The launcher recolours this to match the
-    user's wallpaper palette, so it is a single flat silhouette with no
-    gradient: the mark has to stay readable at one colour.
+    Themed-icon (monochrome) variant. Identical 108dp geometry to foreground.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -11,10 +9,10 @@
     android:viewportHeight="108"
     android:tint="#000000">
     <group
-        android:scaleX="1.75"
-        android:scaleY="1.75"
-        android:translateX="14.8"
-        android:translateY="13.93">
+        android:scaleX="1.8"
+        android:scaleY="1.8"
+        android:translateX="10.8"
+        android:translateY="10.8">
         <path
             android:pathData="M 9.8,15 a 3.2,3.2 0 1,0 6.4,0 a 3.2,3.2 0 1,0 -6.4,0 Z"
             android:fillColor="#FFFFFF" />

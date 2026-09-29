@@ -108,7 +108,7 @@ fun ChatScreen(
     val viewModel: ChatViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
     val chatLlmState by viewModel.chatLlm.collectAsState()
-    val savedProviders by viewModel.providers.collectAsState(initial = emptyList())
+    val savedProviders by viewModel.savedProviders.collectAsState()
     val reasoningVisible by viewModel.reasoningVisible.collectAsState()
     var editingMessageId by remember { mutableStateOf<String?>(null) }
     var showMicRationale by remember { mutableStateOf(false) }
@@ -229,7 +229,9 @@ fun ChatScreen(
     val voiceActive = state.voiceStatus == VoiceStatus.Listening ||
         state.voiceStatus == VoiceStatus.Processing ||
         state.voiceStatus == VoiceStatus.Speaking
-    val showSetupPrompt = state.needsSetup && state.messages.isEmpty()
+    val showSetupPrompt = (state.needsSetup || chatLlmState is ChatLlmState.NeedsSetup) && state.messages.isEmpty()
+    val isPendingLoad = pendingConversationId != null && state.messages.isEmpty()
+    val isInitialLoading = chatLlmState is ChatLlmState.Loading && state.messages.isEmpty()
     val suggestions = state.messages.lastOrNull()
         ?.takeIf { !isGenerating && it.role == Role.ASSISTANT }
         ?.followUps
@@ -446,17 +448,23 @@ fun ChatScreen(
                 label = "chatRegion",
             ) { region ->
                 when (region) {
-                    0 -> if (showSetupPrompt) {
-                        SetupRequired(
-                            onOpenSettings = onOpenSettings,
-                            onOpenProviderSetup = onOpenProviderSetup,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        EmptyHome(
-                            onPromptSelected = viewModel::setDraft,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                    0 -> when {
+                        isPendingLoad || isInitialLoading -> {
+                            Box(modifier = Modifier.fillMaxSize())
+                        }
+                        showSetupPrompt -> {
+                            SetupRequired(
+                                onOpenSettings = onOpenSettings,
+                                onOpenProviderSetup = onOpenProviderSetup,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        else -> {
+                            EmptyHome(
+                                onPromptSelected = viewModel::setDraft,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
 
                     else -> Column(modifier = Modifier.fillMaxSize()) {
