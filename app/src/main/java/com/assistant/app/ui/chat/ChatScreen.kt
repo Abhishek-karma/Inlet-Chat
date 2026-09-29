@@ -203,8 +203,7 @@ fun ChatScreen(
         emptyList()
     }
     var showAttachSheet by remember { mutableStateOf(false) }
-    val searchAvailable by viewModel.searchAvailable.collectAsState()
-    if (showAttachSheet && (attachActions.isNotEmpty() || searchAvailable)) {
+    if (showAttachSheet) {
         AttachmentSheet(
             actions = attachActions,
             subtitles = mapOf(
@@ -214,7 +213,7 @@ fun ChatScreen(
             ),
             onDismiss = { showAttachSheet = false },
             searchEnabled = state.searchEnabled,
-            onToggleSearch = if (searchAvailable) viewModel::toggleSearch else null,
+            onToggleSearch = viewModel::toggleSearch,
         )
     }
 
@@ -394,13 +393,9 @@ fun ChatScreen(
                 },
                 voiceActive = voiceActive,
                 voiceStatus = state.voiceStatus,
-                onAttachClick = if (attachActions.isNotEmpty() || searchAvailable) {
-                    { showAttachSheet = true }
-                } else {
-                    null
-                },
+                onAttachClick = { showAttachSheet = true },
                 searchActive = state.searchEnabled,
-                onToggleSearch = if (searchAvailable) viewModel::toggleSearch else null,
+                onToggleSearch = viewModel::toggleSearch,
             )
         }
     }

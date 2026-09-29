@@ -65,7 +65,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 internal enum class SettingsGroup(val titleRes: Int) {
     Ai(R.string.settings_group_ai),
     Chat(R.string.settings_group_chat),
-    Search(R.string.settings_group_search),
     Data(R.string.settings_group_data),
     Support(R.string.settings_group_support),
     About(R.string.settings_group_about),
@@ -75,7 +74,6 @@ internal enum class SettingsPage(val titleRes: Int, val icon: Int, val group: Se
     Provider(R.string.settings_section_provider, AppIcons.Sparkle, SettingsGroup.Ai),
     Voice(R.string.settings_section_voice, AppIcons.Speak, SettingsGroup.Chat),
     Appearance(R.string.settings_section_appearance, AppIcons.Palette, SettingsGroup.Chat),
-    Search(R.string.settings_section_search, AppIcons.Globe, SettingsGroup.Search),
     Privacy(R.string.settings_section_privacy, AppIcons.Info, SettingsGroup.Data),
     Help(R.string.settings_section_help, AppIcons.Chat, SettingsGroup.Support),
     Terms(R.string.settings_section_terms, AppIcons.Flag, SettingsGroup.About),
@@ -170,7 +168,6 @@ fun SettingsScreen(
                         )
                         SettingsPage.Provider -> ProviderPage(state = state, viewModel = viewModel)
                         SettingsPage.Voice -> VoicePage(state = state, viewModel = viewModel)
-                        SettingsPage.Search -> SearchPage(state = state, viewModel = viewModel)
                         SettingsPage.Appearance -> AppearancePage(state = state, viewModel = viewModel)
                         SettingsPage.About -> AboutPage(versionName = versionName) { pageStack = pageStack + it }
                         SettingsPage.Privacy -> LegalPage(R.string.privacy_intro, PRIVACY_SECTIONS)
@@ -225,13 +222,6 @@ private fun settingsPageSummary(
             state.voiceSpeed < 1.0f -> R.string.settings_speed_slow
             state.voiceSpeed > 1.0f -> R.string.settings_speed_fast
             else -> R.string.settings_speed_normal
-        },
-    )
-    SettingsPage.Search -> stringResource(
-        if (state.searchConfigured) {
-            R.string.settings_configured
-        } else {
-            R.string.settings_not_configured
         },
     )
     SettingsPage.Appearance -> stringResource(
@@ -353,132 +343,6 @@ private fun VoicePage(state: SettingsUiState, viewModel: SettingsViewModel) {
             enabled = state.isLoaded,
             toggleable = state.reasoningVisible to viewModel::setReasoningVisible,
         )
-    }
-}
-
-@Composable
-private fun SearchPage(state: SettingsUiState, viewModel: SettingsViewModel) {
-    Text(
-        text = stringResource(R.string.settings_search_description),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    OutlinedTextField(
-        value = state.searchEndpointInput,
-        onValueChange = viewModel::setSearchEndpointInput,
-        label = { Text(stringResource(R.string.settings_search_endpoint)) },
-        placeholder = { Text(state.storedSearchEndpoint) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-        shape = AppShape.small,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = !state.isSearchSaving && !state.isSearchTesting,
-    )
-    OutlinedTextField(
-        value = state.searchApiKeyInput,
-        onValueChange = viewModel::setSearchApiKeyInput,
-        label = { Text(stringResource(R.string.settings_search_api_key)) },
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        placeholder = {
-            if (state.storedSearchKey != null && state.searchApiKeyInput.isEmpty()) {
-                Text(stringResource(R.string.settings_api_key_saved_placeholder))
-            }
-        },
-        shape = AppShape.small,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = !state.isSearchSaving && !state.isSearchTesting,
-    )
-    state.searchFormError?.let { error ->
-        Text(
-            text = error,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
-
-    OutlinedButton(
-        onClick = viewModel::testSearch,
-        enabled = state.isLoaded && !state.isSearchTesting && !state.isSearchSaving,
-        shape = AppShape.pill,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        if (state.isSearchTesting) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(18.dp)
-                    .padding(end = AppSpacing.sm),
-                strokeWidth = 2.dp,
-            )
-        }
-        Text(
-            stringResource(
-                if (state.isSearchTesting) {
-                    R.string.settings_search_testing
-                } else {
-                    R.string.settings_search_test
-                },
-            ),
-        )
-    }
-
-    state.searchTestOutcome?.let { outcome ->
-        val color = when (outcome) {
-            is ConnectionOutcome.Success -> MaterialTheme.colorScheme.primary
-            is ConnectionOutcome.Failure -> MaterialTheme.colorScheme.error
-        }
-        val text = when (outcome) {
-            is ConnectionOutcome.Success -> stringResource(R.string.settings_connection_success)
-            is ConnectionOutcome.Failure -> outcome.message
-        }
-        Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = color,
-            )
-            if (outcome is ConnectionOutcome.Failure && outcome.detail != null) {
-                Text(
-                    text = outcome.detail,
-                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = AppCodeFontFamily),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f),
-                            shape = AppShape.small,
-                        )
-                        .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
-                )
-            }
-        }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(
-            onClick = viewModel::resetSearchEndpointToDefault,
-            enabled = !state.isSearchSaving,
-        ) {
-            Text(stringResource(R.string.settings_search_reset_default))
-        }
-
-        Button(
-            onClick = viewModel::saveSearch,
-            enabled = state.isLoaded && !state.isSearchSaving && !state.isSearchTesting,
-            shape = AppShape.pill,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-        ) {
-            Text(
-                stringResource(
-                    if (state.isSearchSaving) R.string.settings_saving else R.string.settings_save,
-                ),
-            )
-        }
     }
 }
 

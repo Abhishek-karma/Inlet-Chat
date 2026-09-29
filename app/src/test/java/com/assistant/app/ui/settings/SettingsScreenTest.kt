@@ -265,7 +265,6 @@ class SettingsScreenTest {
             R.string.settings_section_provider,
             R.string.settings_section_voice,
             R.string.settings_section_appearance,
-            R.string.settings_section_search,
             R.string.settings_section_privacy,
             R.string.settings_section_help,
             R.string.settings_section_terms,

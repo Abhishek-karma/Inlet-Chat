@@ -138,14 +138,6 @@
     <string name="voice_speaking_hint">Speaking — tap the mic to stop.</string>
     <string name="menu_speak">Speak</string>
     <!-- Web search. -->
-    <string name="settings_section_search">Web search</string>
-    <string name="settings_search_description">Answers can use live web results when Web search is toggled in chat. Powered by open SearXNG metasearch with zero paid API keys required.</string>
-    <string name="settings_search_endpoint">Search service URL</string>
-    <string name="settings_search_endpoint_hint">https://searx.be/search</string>
-    <string name="settings_search_api_key">Instance key (optional)</string>
-    <string name="settings_search_reset_default">Reset to default service</string>
-    <string name="settings_search_test">Test search</string>
-    <string name="settings_search_testing">Testing search…</string>
     <string name="cd_toggle_search">Toggle web search</string>
     <!-- Reasoning display. -->
     <string name="settings_section_reasoning">Reasoning</string>
@@ -221,7 +213,6 @@
     <string name="settings_group_ai">AI</string>
     <string name="settings_group_chat">Chat</string>
     <string name="settings_group_data">Data &amp; privacy</string>
-    <string name="settings_group_search">Search</string>
     <string name="settings_group_support">Support</string>
     <string name="settings_group_about">About</string>
     <string name="legal_todo_header">Before release</string>
@@ -253,11 +244,11 @@
     <string name="settings_section_privacy">Privacy</string>
     <string name="privacy_intro">This page describes what this app actually does with your data, based on the code in this build.</string>
     <string name="privacy_local_title">Stored on this device</string>
-    <string name="privacy_local_body">• Conversations, messages, and attachment references are stored in the app\'s own database.\n• Attached images and text files are copied into the app\'s private files directory. Images are downscaled when they are added.\n• Preferences such as theme, text size, voice, and the web search service are stored locally.\n• API keys are stored in encrypted preferences backed by the Android keystore. Android backup is turned off for this app, so keys are not copied to a device backup.</string>
+    <string name="privacy_local_body">• Conversations, messages, and attachment references are stored in the app\'s own database.\n• Attached images and text files are copied into the app\'s private files directory. Images are downscaled when they are added.\n• Preferences such as theme, text size, and voice are stored locally.\n• API keys are stored in encrypted preferences backed by the Android keystore. Android backup is turned off for this app, so keys are not copied to a device backup.</string>
     <string name="privacy_provider_title">Sent to your AI provider</string>
     <string name="privacy_provider_body">When you send a message, the app sends it, the conversation context, your selected model, and your API key to the provider endpoint you configured. Attached images are sent as image data; attached text files are inlined into the message. Responses stream back. Inlet Chat has no server in between: the provider receives the request directly from your device, and that provider\'s own retention and training practices apply to it.</string>
     <string name="privacy_search_title">Web search</string>
-    <string name="privacy_search_body">If you turn on web search, the search text is sent to the search service URL configured in Settings, and the pages it returns are fetched so their text can be used as context. That service and the fetched sites are third parties.</string>
+    <string name="privacy_search_body">If you turn on web search, your message is sent to the search service, and the pages it returns are fetched so their text can be used as context. That service and the fetched sites are third parties.</string>
     <string name="privacy_voice_title">Voice</string>
     <string name="privacy_voice_body">Voice input uses Android\'s speech recognition and voice output uses the system text-to-speech engine. Whether recognition happens on the device or through the device manufacturer\'s service depends on the recognizer your device provides, which this app does not control. Audio is only captured while the microphone button is in use.</string>
     <string name="privacy_analytics_title">Analytics and third-party SDKs</string>
@@ -311,7 +302,7 @@
     <string name="help_attachments_title">Attachment problems</string>
     <string name="help_attachments_body">Images and text files are copied into the app when added. Large images are downscaled, and unsupported file types are rejected. If an image is not recognised, try a PNG or JPEG. Text files are inlined into your message, so very long files make for very long requests.</string>
     <string name="help_search_title">Web search problems</string>
-    <string name="help_search_body">Web search needs a search service URL in Settings → Web search and must be toggled on in the conversation. If Test search fails, the service is unreachable or blocked; try the default service or another instance. Answers still work without search.</string>
+    <string name="help_search_body">Web search must be toggled on in the conversation, using the globe button in the composer. It needs no account or API key, but the search service can rate-limit or block automated requests; a rate-limit notice means the answer was still produced, just without web results.</string>
     <string name="help_contact_title">Report a problem</string>
     <string name="help_contact_body">TODO(support): no issue tracker, support address, or community link is defined for this project. Add a real destination here before release — do not ship a placeholder address.</string>
 </resources>

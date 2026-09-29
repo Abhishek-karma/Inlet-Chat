@@ -14,6 +14,7 @@ import com.assistant.app.ui.chat.ChatViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -797,5 +798,55 @@ class ChatSearchTest {
 
         assertEquals(ChatStatus.Idle, viewModel.uiState.value.status)
         assertTrue(provider.requests.single().messages.last().second.contains("Hi"))
+    }
+
+    @Test
+    fun `the user message appears before a slow search finishes`() = runSearchTest(
+        script = listOf(ScriptedEvent.Delay(1_000), ScriptedEvent.Emit("Hello")),
+        webSearch = { _ ->
+            delay(1_000)
+            com.assistant.app.llm.model.SearchOutcome.Success(
+                listOf(
+                    com.assistant.app.llm.model.SearchResult("Guide", "https://kotlinlang.org", "async stuff"),
+                ),
+            )
+        },
+    ) { viewModel, provider, repository ->
+        repository.setSearchEnabled(true)
+        viewModel.send("Kotlin coroutines")
+        runCurrent()
+
+        // The search is still in flight, but the turn is already on screen.
+        val shown = viewModel.uiState.value.messages
+        assertEquals("Kotlin coroutines", shown[0].content)
+        assertEquals(Role.ASSISTANT, shown[1].role)
+        assertTrue(provider.requests.isEmpty())
+
+        advanceUntilIdle()
+        assertEquals(
+            listOf("https://kotlinlang.org"),
+            viewModel.uiState.value.messages[0].webResults.map { it.url },
+        )
+    }
+
+    @Test
+    fun `a second send is ignored while the first search is still running`() = runSearchTest(
+        script = listOf(ScriptedEvent.Emit("Hello")),
+        webSearch = { _ ->
+            delay(1_000)
+            com.assistant.app.llm.model.SearchOutcome.Success(emptyList())
+        },
+    ) { viewModel, provider, repository ->
+        repository.setSearchEnabled(true)
+        viewModel.send("First")
+        runCurrent()
+        viewModel.send("Second")
+        advanceUntilIdle()
+
+        val userTexts = viewModel.uiState.value.messages
+            .filter { it.role == Role.USER }
+            .map { it.content }
+        assertEquals(listOf("First"), userTexts)
+        assertEquals(1, provider.requests.size)
     }
 }

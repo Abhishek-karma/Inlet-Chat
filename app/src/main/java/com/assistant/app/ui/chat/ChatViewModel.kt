@@ -42,7 +42,6 @@ class ChatViewModel(
     voiceAutoPlay: () -> Boolean = { true },
     voiceSpeed: () -> Float = { 1.0f },
     voiceId: () -> String? = { null },
-    private val searchConfigured: StateFlow<Boolean> = MutableStateFlow(false),
     val voiceOutputEnabled: StateFlow<Boolean> = MutableStateFlow(false),
     private val setVoiceOutput: suspend (Boolean) -> Unit = {},
 ) : ViewModel() {
@@ -86,7 +85,6 @@ class ChatViewModel(
 
     val isVoiceInputAvailable: Boolean get() = voiceHandler.isVoiceInputAvailable
     val attachmentSupport: Boolean get() = attachmentIngester != null
-    val searchAvailable: StateFlow<Boolean> = searchConfigured
     val ttsAvailable: Boolean get() = voiceHandler.ttsAvailable
     val speakAvailable: Boolean get() = voiceHandler.speakAvailable
 
@@ -267,7 +265,6 @@ class ChatViewModel(
         private val voiceAutoPlay: () -> Boolean = { true },
         private val voiceSpeed: () -> Float = { 1.0f },
         private val voiceId: () -> String? = { null },
-        private val searchAvailable: StateFlow<Boolean> = MutableStateFlow(false),
         private val voiceOutputEnabled: StateFlow<Boolean> = MutableStateFlow(false),
         private val setVoiceOutput: suspend (Boolean) -> Unit = {},
     ) : ViewModelProvider.Factory {
@@ -289,7 +286,6 @@ class ChatViewModel(
                 voiceAutoPlay,
                 voiceSpeed,
                 voiceId,
-                searchAvailable,
                 voiceOutputEnabled,
                 setVoiceOutput,
             ) as T

@@ -15,14 +15,6 @@ class InMemorySecureKeyStore : SecureKeyStore {
         if (value == null) keys.remove(id) else keys[id] = value
     }
 
-    private var searchKey: String? = null
-
-    override fun searchApiKey(): String? = searchKey
-
-    override fun setSearchApiKey(value: String?) {
-        searchKey = value
-    }
-
     private var legacyKey: String? = null
 
     override fun legacyApiKey(): String? = legacyKey

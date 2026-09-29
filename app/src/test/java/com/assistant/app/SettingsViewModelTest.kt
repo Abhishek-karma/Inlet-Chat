@@ -341,14 +341,12 @@ class SettingsViewModelTest {
         awaitSettled(viewModel)
         viewModel.startAdd()
         viewModel.setApiKeyInput("sk-super-secret")
-        viewModel.setSearchApiKeyInput("brave-super-secret")
         viewModel.setRevealKey(true)
 
         val text = viewModel.uiState.value.toString()
 
         assertTrue(text.contains("<redacted>"))
         assertFalse(text.contains("sk-super-secret"))
-        assertFalse(text.contains("brave-super-secret"))
         assertFalse(text.contains("sk-stored"))
     }
 
@@ -418,46 +416,6 @@ class SettingsViewModelTest {
             appPreferences.voiceId.firstBounded("voiceId cleared") { it == null }
 
             assertNull(viewModel.uiState.value.voiceId)
-        }
-
-    @Test
-    fun `saving a valid search endpoint persists it and enables search`() =
-        runSettingsTest { viewModel, _, appPreferences, _ ->
-            awaitSettled(viewModel)
-
-            viewModel.setSearchEndpointInput("https://custom-searxng.example/search")
-            viewModel.saveSearch()
-            advanceUntilIdle()
-
-            val stored = appPreferences.searchEndpoint.firstBounded("searchEndpoint updated") {
-                it == "https://custom-searxng.example/search"
-            }
-            assertEquals("https://custom-searxng.example/search", stored)
-            assertEquals("https://custom-searxng.example/search", viewModel.uiState.value.storedSearchEndpoint)
-            assertTrue(viewModel.uiState.value.searchConfigured)
-            assertNull(viewModel.uiState.value.searchFormError)
-        }
-
-    @Test
-    fun `invalid search endpoint url shows validation error`() =
-        runSettingsTest { viewModel, _, _, _ ->
-            awaitSettled(viewModel)
-
-            viewModel.setSearchEndpointInput("invalid-url-without-scheme")
-            viewModel.saveSearch()
-
-            assertEquals(SettingsViewModel.SEARCH_URL_INVALID, viewModel.uiState.value.searchFormError)
-        }
-
-    @Test
-    fun `reset search endpoint sets default searxng url`() =
-        runSettingsTest { viewModel, _, _, _ ->
-            awaitSettled(viewModel)
-
-            viewModel.setSearchEndpointInput("https://my-instance.org")
-            viewModel.resetSearchEndpointToDefault()
-
-            assertEquals(AppPreferences.DEFAULT_SEARCH_ENDPOINT, viewModel.uiState.value.searchEndpointInput)
         }
 
     @Test

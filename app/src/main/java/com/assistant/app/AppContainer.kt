@@ -16,6 +16,9 @@ import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.EncryptedSecureKeyStore
 import com.assistant.app.data.settings.SecureKeyStore
 import com.assistant.app.data.settings.TextSize
+import com.assistant.app.llm.DuckDuckGoSearchProvider
+import com.assistant.app.llm.HttpPageFetcher
+import com.assistant.app.llm.JsoupContentExtractor
 import com.assistant.app.llm.OpenAICompatibleProvider
 import com.assistant.app.llm.WebSearchClient
 import com.assistant.app.ui.chat.ChatViewModel
@@ -96,10 +99,6 @@ class AppContainer(context: Context) {
         }
     }
 
-    val searchEndpointState: StateFlow<String> by lazy {
-        appPreferences.searchEndpoint.stateIn(appScope, SharingStarted.Eagerly, AppPreferences.DEFAULT_SEARCH_ENDPOINT)
-    }
-
     private val chatRepository: ChatRepository by lazy {
         ChatRepository(
             chatLlm = chatLlm,
@@ -109,12 +108,11 @@ class AppContainer(context: Context) {
             },
             attachmentsDir = attachmentIngester.attachmentsDir,
             webSearch = { query ->
-                val endpoint = searchEndpointState.value
-                val key = secureKeyStore.searchApiKey()
+                val client = httpClient
                 WebSearchClient(
-                    client = httpClient,
-                    endpoint = endpoint,
-                    apiKey = key,
+                    provider = DuckDuckGoSearchProvider(client),
+                    pageFetcher = HttpPageFetcher(client),
+                    contentExtractor = JsoupContentExtractor(),
                 ).search(query)
             },
         )
@@ -128,7 +126,6 @@ class AppContainer(context: Context) {
         val voiceAutoPlayState = appPreferences.voiceAutoPlay.stateIn(appScope, SharingStarted.Eagerly, true)
         val voiceSpeedState = appPreferences.voiceSpeed.stateIn(appScope, SharingStarted.Eagerly, 1.0f)
         val voiceIdState = appPreferences.voiceId.stateIn(appScope, SharingStarted.Eagerly, null)
-        val searchConfiguredState = appPreferences.searchConfigured.stateIn(appScope, SharingStarted.Eagerly, true)
         val reasoningVisibleState = appPreferences.reasoningVisible.stateIn(appScope, SharingStarted.Eagerly, true)
 
         return ChatViewModel.Factory(
@@ -144,7 +141,6 @@ class AppContainer(context: Context) {
             voiceAutoPlay = { voiceAutoPlayState.value },
             voiceSpeed = { voiceSpeedState.value },
             voiceId = { voiceIdState.value },
-            searchAvailable = searchConfiguredState,
             voiceOutputEnabled = voiceOutputState,
             setVoiceOutput = { enabled -> appPreferences.setVoiceOutputEnabled(enabled) },
         )
@@ -170,9 +166,6 @@ class AppContainer(context: Context) {
                 } else {
                     OpenAICompatibleProvider(httpClient, baseUrl, apiKey, model)
                 }
-            },
-            newTestSearch = { endpoint: String, apiKey: String? ->
-                com.assistant.app.llm.SearXNGSearchProvider(httpClient, endpoint, apiKey).search("test", 1)
             },
             ttsAvailable = voiceOutput.isAvailable,
             voiceOutput = voiceOutput,

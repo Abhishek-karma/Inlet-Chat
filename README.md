@@ -26,7 +26,7 @@ Inlet Chat is a chat application, not an agent platform: it has no autonomous ag
 - Multiple saved OpenAI-compatible providers with a top-bar switcher
 - Configurable name, base URL, API key, and model, with a connection test
 - Collapsible model reasoning when the provider streams `reasoning_content`, with a settings toggle
-- Optional web search grounding, no API key required — a SearXNG-compatible endpoint if you configure one, otherwise a keyless fallback — toggled per conversation, with sources listed under the answer
+- Optional web search grounding, no API key or account required — toggled per conversation, with sources listed under the answer
 
 **Attachments and voice**
 

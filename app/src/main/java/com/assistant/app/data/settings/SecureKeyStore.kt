@@ -20,10 +20,6 @@ interface SecureKeyStore {
 
     fun setApiKey(id: Long, value: String?)
 
-    fun searchApiKey(): String?
-
-    fun setSearchApiKey(value: String?)
-
     /** The pre-1.2 single-provider key, read once for seeding. */
     fun legacyApiKey(): String?
 
@@ -64,15 +60,6 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
         val prefs = preferences ?: return
         prefs.edit().apply {
             if (value == null) remove(keyFor(id)) else putString(keyFor(id), value)
-        }.commit()
-    }
-
-    override fun searchApiKey(): String? = preferences?.getString(KEY_SEARCH_API_KEY, null)
-
-    override fun setSearchApiKey(value: String?) {
-        val prefs = preferences ?: return
-        prefs.edit().apply {
-            if (value == null) remove(KEY_SEARCH_API_KEY) else putString(KEY_SEARCH_API_KEY, value)
         }.commit()
     }
 
@@ -137,6 +124,5 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
         const val TAG = "EncryptedKeyStore"
         const val PREFS_FILE = "provider_secure_prefs"
         const val KEY_API_KEY = "api_key"
-        const val KEY_SEARCH_API_KEY = "search_api_key"
     }
 }

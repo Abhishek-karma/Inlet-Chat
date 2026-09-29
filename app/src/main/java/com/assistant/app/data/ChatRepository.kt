@@ -62,6 +62,9 @@ class ChatRepository(
     /** The failed generation's message id while it is still shown with an error. */
     private var failedAssistantId: String? = null
 
+    /** True while a send is waiting on web search, before generation starts. */
+    private var searching = false
+
     /** Conversation snapshots for the no-persistence (test) mode. */
     private val conversationSnapshots = LinkedHashMap<String, List<UiMessage>>()
 
@@ -195,7 +198,12 @@ class ChatRepository(
 
     suspend fun send(text: String) {
         val content = text.trim()
-        if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) || generationController.isGenerating) return
+        if ((content.isEmpty() && _uiState.value.pendingAttachments.isEmpty()) ||
+            generationController.isGenerating ||
+            searching
+        ) {
+            return
+        }
         cleanupFailedAssistantMessage()
         val job = currentCoroutineContext().job
         try {
@@ -221,26 +229,22 @@ class ChatRepository(
         val isNewConversation = _uiState.value.conversationId == null
         val conversationId = _uiState.value.conversationId ?: newId()
         val attachments = _uiState.value.pendingAttachments
-        val webResults = if (_uiState.value.searchEnabled && content.isNotEmpty()) {
-            runWebSearch(content)
-        } else {
-            emptyList()
-        }
         val userMessage = UiMessage(
             newId(),
             Role.USER,
             content,
             now(),
             attachments = attachments,
-            webResults = webResults,
         )
         val assistantId = newId()
+        // Publish before searching. Web search is network-bound, and waiting
+        // for it here would leave the send button looking unresponsive.
         _uiState.update { state ->
             state.copy(
                 conversationId = conversationId,
                 messages = state.messages +
                     userMessage +
-                    UiMessage(assistantId, Role.ASSISTANT, "", now(), sources = webResults),
+                    UiMessage(assistantId, Role.ASSISTANT, "", now()),
                 draft = "",
             )
         }
@@ -254,11 +258,31 @@ class ChatRepository(
             s.appendMessage(userMessage.toEntity(conversationId))
             s.appendMessage(UiMessage(assistantId, Role.ASSISTANT, "", now()).toEntity(conversationId))
             attachments.forEach { s.appendAttachment(attachmentManager.toEntity(it, userMessage.id, conversationId, now())) }
-            if (webResults.isNotEmpty()) {
-                s.updateSources(assistantId, webResults.toSearchJson())
-            }
         }
         clearPendingAttachments()
+
+        val webResults = if (_uiState.value.searchEnabled && content.isNotEmpty()) {
+            searching = true
+            try {
+                runWebSearch(content)
+            } finally {
+                searching = false
+            }
+        } else {
+            emptyList()
+        }
+        if (webResults.isNotEmpty()) {
+            _uiState.update { state ->
+                state.copy(messages = state.messages.map { message ->
+                    when (message.id) {
+                        userMessage.id -> message.copy(webResults = webResults)
+                        assistantId -> message.copy(sources = webResults)
+                        else -> message
+                    }
+                })
+            }
+            store?.updateSources(assistantId, webResults.toSearchJson())
+        }
         startGeneration(llm, assistantId, job)
     }
 

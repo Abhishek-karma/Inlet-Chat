@@ -29,11 +29,9 @@ sealed interface SearchOutcome {
 }
 
 enum class SearchError(val userMessage: String) {
-    InvalidCredentials("Invalid search credentials or authorization."),
     RateLimited("Search rate limit reached. Try again shortly."),
     NetworkUnavailable("Unable to connect to search service."),
     Timeout("Search request timed out."),
-    ServerError("Search service is temporarily unavailable."),
     InvalidResponse("Search service returned an invalid response."),
     NoResults("No relevant web results found."),
     Unknown("Something went wrong with search."),
