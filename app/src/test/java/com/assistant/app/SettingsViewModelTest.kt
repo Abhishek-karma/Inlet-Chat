@@ -250,6 +250,24 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `connection test records failure outcome with actionable message`() = runSettingsTest(
+        script = listOf(ScriptedEvent.Fail(ProviderError.InvalidCredentials, "API key was invalid")),
+        seed = { store, _ ->
+            store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com", "gemini-3.6-flash"), "bad-key")
+        },
+    ) { viewModel, _, _, _ ->
+        awaitSettled(viewModel)
+        val id = viewModel.uiState.value.providers.single().id
+        viewModel.edit(id)
+        viewModel.testConnection()
+        viewModel.uiState.first { it.connectionOutcome is ConnectionOutcome.Failure }
+
+        val outcome = viewModel.uiState.value.connectionOutcome as ConnectionOutcome.Failure
+        assertEquals(ProviderError.InvalidCredentials.userMessage, outcome.message)
+        assertEquals("API key was invalid", outcome.detail)
+    }
+
+    @Test
     fun `voice output toggle persists immediately`() = runSettingsTest { viewModel, _, appPreferences, _ ->
         awaitSettled(viewModel)
 
@@ -441,6 +459,61 @@ class SettingsViewModelTest {
 
             assertEquals(AppPreferences.DEFAULT_SEARCH_ENDPOINT, viewModel.uiState.value.searchEndpointInput)
         }
+
+    @Test
+    fun `save and activate Gemini provider`() = runSettingsTest { viewModel, store, _, _ ->
+        awaitSettled(viewModel)
+        viewModel.startAdd()
+        viewModel.fillPreset("Gemini", "https://generativelanguage.googleapis.com", "gemini-2.5-flash")
+        viewModel.setApiKeyInput("AIzaSyKey123")
+        viewModel.save()
+
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isEditing)
+
+        val providers = viewModel.uiState.value.providers
+        assertEquals(1, providers.size)
+        val gemini = providers.single()
+        assertEquals("Gemini", gemini.name)
+        assertEquals("gemini-2.5-flash", gemini.model)
+        assertTrue(gemini.isActive)
+    }
+
+    @Test
+    fun `switching active provider updates active flag and preserves models`() = runSettingsTest(
+        seed = { store, _ ->
+            val p1 = store.addProvider(ProviderDraft("OpenAI", "https://api.openai.com/v1", "gpt-4o"), "sk-1")
+            val p2 = store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com", "gemini-2.5-flash"), "AIzaKey")
+            store.setActive(p1)
+        },
+    ) { viewModel, store, _, _ ->
+        awaitSettled(viewModel)
+        val initial = viewModel.uiState.value.providers
+        assertEquals(2, initial.size)
+        assertTrue(initial.first { it.name == "OpenAI" }.isActive)
+        assertFalse(initial.first { it.name == "Gemini" }.isActive)
+
+        val geminiId = initial.first { it.name == "Gemini" }.id
+        viewModel.activateProvider(geminiId)
+        advanceUntilIdle()
+
+        val updated = viewModel.uiState.value.providers
+        assertFalse(updated.first { it.name == "OpenAI" }.isActive)
+        assertTrue(updated.first { it.name == "Gemini" }.isActive)
+        assertEquals("gpt-4o", updated.first { it.name == "OpenAI" }.model)
+        assertEquals("gemini-2.5-flash", updated.first { it.name == "Gemini" }.model)
+    }
+
+    @Test
+    fun `apiKey is redacted in uiState toString`() = runSettingsTest { viewModel, _, _, _ ->
+        awaitSettled(viewModel)
+        viewModel.startAdd()
+        viewModel.setApiKeyInput("super-secret-api-key-12345")
+
+        val stateString = viewModel.uiState.value.toString()
+        assertFalse(stateString.contains("super-secret-api-key-12345"))
+        assertTrue(stateString.contains("apiKeyInput=<redacted>"))
+    }
 
     private companion object {
         val NATURAL = VoiceOption(

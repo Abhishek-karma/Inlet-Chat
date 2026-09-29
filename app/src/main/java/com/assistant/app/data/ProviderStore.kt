@@ -72,7 +72,12 @@ class ProviderStore(
     /** Validates [draft] for provider [id] (0 = new); user-facing problem or null. */
     suspend fun validate(id: Long, draft: ProviderDraft, enteredKey: String?): String? {
         if (draft.name.isBlank()) return ERROR_NAME_REQUIRED
-        if (!isHttpUrl(draft.baseUrl)) return ERROR_BASE_URL_INVALID
+        val normalizedUrl = if (draft.baseUrl.trim().equals("gemini", ignoreCase = true)) {
+            "https://generativelanguage.googleapis.com"
+        } else {
+            draft.baseUrl.trim()
+        }
+        if (!isHttpUrl(normalizedUrl)) return ERROR_BASE_URL_INVALID
         if (draft.model.isBlank()) return ERROR_MODEL_REQUIRED
         if (enteredKey.isNullOrBlank() && apiKey(id).isNullOrBlank()) return ERROR_API_KEY_REQUIRED
         return null
@@ -80,10 +85,15 @@ class ProviderStore(
 
     /** Returns the new provider's id. The first provider added becomes active. */
     suspend fun addProvider(draft: ProviderDraft, apiKey: String?): Long {
+        val normalizedUrl = if (draft.baseUrl.trim().equals("gemini", ignoreCase = true)) {
+            "https://generativelanguage.googleapis.com"
+        } else {
+            draft.baseUrl.trim()
+        }
         val id = db.providerDao().insert(
             ProviderEntity(
                 name = draft.name.trim(),
-                baseUrl = draft.baseUrl.trim(),
+                baseUrl = normalizedUrl,
                 model = draft.model.trim(),
             ),
         )
@@ -101,10 +111,15 @@ class ProviderStore(
      * key. The key is written first so a rebuilt chat provider already sees it.
      */
     suspend fun updateProvider(id: Long, draft: ProviderDraft, apiKey: String?) {
+        val normalizedUrl = if (draft.baseUrl.trim().equals("gemini", ignoreCase = true)) {
+            "https://generativelanguage.googleapis.com"
+        } else {
+            draft.baseUrl.trim()
+        }
         if (!apiKey.isNullOrBlank()) {
             withContext(ioDispatcher) { keyStore.setApiKey(id, apiKey) }
         }
-        db.providerDao().update(id, draft.name.trim(), draft.baseUrl.trim(), draft.model.trim())
+        db.providerDao().update(id, draft.name.trim(), normalizedUrl, draft.model.trim())
     }
 
     /**

@@ -34,33 +34,50 @@ class ProviderModelsClient(
             if (trimmedKey.isEmpty()) {
                 return@withContext Result.failure(IllegalArgumentException("API key is empty"))
             }
-            val request = Request.Builder()
-                .url("$trimmedBase/models")
-                .header("Authorization", "Bearer $trimmedKey")
+            val isGeminiEndpoint = baseUrl.contains("generativelanguage.googleapis.com", ignoreCase = true) ||
+                baseUrl.trim().lowercase() == "gemini"
+            val url = if (isGeminiEndpoint) {
+                val base = if (trimmedBase == "gemini") "https://generativelanguage.googleapis.com" else trimmedBase
+                val norm = if (base.endsWith("/v1beta") || base.endsWith("/v1")) base else "$base/v1beta"
+                "$norm/models"
+            } else {
+                "$trimmedBase/models"
+            }
+            val requestBuilder = Request.Builder()
+                .url(url)
                 .header("Accept", "application/json")
                 .get()
-                .build()
+            if (isGeminiEndpoint) {
+                requestBuilder.header("x-goog-api-key", trimmedKey)
+            } else {
+                requestBuilder.header("Authorization", "Bearer $trimmedKey")
+            }
+            val request = requestBuilder.build()
             try {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
+                        val errorText = try {
+                            val raw = response.body?.string()
+                            JSONObject(raw.orEmpty()).optJSONObject("error")?.optString("message")
+                        } catch (_: Exception) {
+                            null
+                        }
+                        val msg = errorText?.ifBlank { null } ?: "HTTP ${response.code}"
                         return@withContext Result.failure(
-                            IOException("models request failed (HTTP ${response.code})"),
+                            IOException(msg),
                         )
                     }
                     val bodySource = response.body?.source()
                         ?: return@withContext Result.failure(IOException("models response had no body"))
-                    // Cap the read: a misbehaving endpoint must not be able
-                    // to grow memory without limit. Anything at or over the
-                    // cap is a broken endpoint, not a listing to truncate —
-                    // a truncated body is not valid JSON and would be
-                    // reported as a confusing parse failure.
                     bodySource.request(MAX_RESPONSE_BYTES + 1)
                     if (bodySource.buffer.size > MAX_RESPONSE_BYTES) {
                         return@withContext Result.failure(
                             IOException("models response exceeded ${MAX_RESPONSE_BYTES} bytes"),
                         )
                     }
-                    Result.success(parseModelIds(bodySource.readUtf8()))
+                    val json = bodySource.readUtf8()
+                    val models = if (isGeminiEndpoint) parseGeminiModelIds(json) else parseModelIds(json)
+                    Result.success(models)
                 }
             } catch (e: IOException) {
                 Result.failure(e)
@@ -68,6 +85,39 @@ class ProviderModelsClient(
                 Result.failure(e)
             }
         }
+
+    /** Pulls `models[].name` out of the Gemini list envelope. */
+    private fun parseGeminiModelIds(body: String): List<String> {
+        if (body.isBlank()) return emptyList()
+        val array = try {
+            JSONObject(body).optJSONArray("models")
+        } catch (e: JSONException) {
+            throw IOException("models response was not JSON", e)
+        } ?: return emptyList()
+        val ids = buildList {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val methods = item.optJSONArray("supportedGenerationMethods")
+                var canGenerate = false
+                if (methods != null) {
+                    for (m in 0 until methods.length()) {
+                        if (methods.optString(m) == "generateContent") {
+                            canGenerate = true
+                            break
+                        }
+                    }
+                } else {
+                    canGenerate = true
+                }
+                if (canGenerate) {
+                    val rawName = item.optString("name").trim()
+                    val cleanName = rawName.removePrefix("models/")
+                    if (cleanName.isNotEmpty()) add(cleanName)
+                }
+            }
+        }
+        return ids.distinct().sorted()
+    }
 
     /** Pulls `data[].id` out of the OpenAI-compatible list envelope. */
     private fun parseModelIds(body: String): List<String> {

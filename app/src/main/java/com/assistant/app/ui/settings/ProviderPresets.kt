@@ -34,6 +34,12 @@ internal data class ProviderPreset(
 
 internal val ProviderPresets = listOf(
     ProviderPreset(
+        name = "Gemini",
+        baseUrl = "https://generativelanguage.googleapis.com",
+        defaultModel = "gemini-2.5-flash",
+        keyUrl = "https://aistudio.google.com/app/apikey",
+    ),
+    ProviderPreset(
         name = "OpenAI",
         baseUrl = "https://api.openai.com/v1",
         defaultModel = "gpt-4o-mini",
@@ -58,6 +64,19 @@ internal val ProviderPresets = listOf(
         keyUrl = "https://naga.ac",
     ),
 )
+
+internal const val GEMINI_NAME = "Gemini"
+internal const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com"
+internal const val GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
+internal const val GEMINI_KEY_URL = "https://aistudio.google.com/app/apikey"
+
+internal fun isGemini(baseUrl: String, name: String = ""): Boolean {
+    val b = baseUrl.trim().lowercase()
+    val n = name.trim().lowercase()
+    return b.contains("generativelanguage.googleapis.com") ||
+        n.contains("gemini") ||
+        b.contains("gemini")
+}
 
 internal fun presetForBaseUrl(baseUrl: String): ProviderPreset? {
     val normalized = baseUrl.trim().trimEnd('/')

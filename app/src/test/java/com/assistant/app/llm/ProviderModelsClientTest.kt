@@ -115,4 +115,56 @@ class ProviderModelsClientTest {
 
         assertEquals(emptyList<String>(), models)
     }
+
+    @Test
+    fun parsesGeminiModelIdsFilteredAndStripped() = runTest {
+        val geminiJson = """
+        {
+          "models": [
+            {
+              "name": "models/gemini-2.5-flash",
+              "supportedGenerationMethods": ["generateContent"]
+            },
+            {
+              "name": "models/gemini-embedding-001",
+              "supportedGenerationMethods": ["embedContent"]
+            },
+            {
+              "name": "models/gemini-2.5-pro",
+              "supportedGenerationMethods": ["generateContent", "countTokens"]
+            }
+          ]
+        }
+        """.trimIndent()
+
+        server.enqueue(MockResponse().setBody(geminiJson))
+
+        val models = client().listModels(
+            baseUrl = server.url("/").toString() + "generativelanguage.googleapis.com",
+            apiKey = "AIzaSyKey",
+        ).getOrThrow()
+
+        assertEquals(listOf("gemini-2.5-flash", "gemini-2.5-pro"), models)
+
+        val req = server.takeRequest()
+        assertEquals("AIzaSyKey", req.getHeader("x-goog-api-key"))
+        assertTrue(req.path!!.endsWith("/models"))
+    }
+
+    @Test
+    fun geminiHttpErrorExtractsErrorMessage() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setBody("""{"error":{"code":400,"message":"API key not valid","status":"INVALID_ARGUMENT"}}"""),
+        )
+
+        val result = client().listModels(
+            baseUrl = server.url("/").toString() + "generativelanguage.googleapis.com",
+            apiKey = "bad-key",
+        )
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("API key not valid") == true)
+    }
 }

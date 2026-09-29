@@ -1,25 +1,16 @@
 package com.assistant.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -40,12 +31,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
 import com.assistant.app.data.local.ProviderEntity
-import com.assistant.app.ui.theme.AppCodeFontFamily
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
 /**
- * Inlet Top Bar: Quiet, content-first navigation and model indicator.
+ * Inlet Top Bar: Rock-solid, stable navigation and model indicator without startup jitter.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,53 +87,67 @@ fun AssistantTopBar(
             }
         },
         title = {
-            val switchable = activeProvider != null &&
-                onProviderSelected != null && savedProviders.size > 1
-
-            if (switchable) {
-                var pickerOpen by remember { mutableStateOf(false) }
-                val active = activeProvider
-                ModelSelectorCapsule(
-                    label = title,
-                    model = active?.model,
-                    onClick = { pickerOpen = true },
+            if (onBack != null) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (pickerOpen) {
-                    NaraActionSheet(
-                        actions = savedProviders.map { provider ->
-                            NaraAction(
-                                label = provider.name,
-                                icon = AppIcons.Sparkle,
-                                trailing = provider.model,
-                                selected = if (provider.id == active?.id) true else null,
-                                onClick = {
-                                    if (provider.id != active?.id) {
-                                        onProviderSelected.invoke(provider.id)
-                                    }
-                                },
-                            )
-                        },
-                        onDismiss = { pickerOpen = false },
-                    )
-                }
             } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onOpenDrawer != null && title == stringResource(R.string.app_name)) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_inlet_logo),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .padding(end = AppSpacing.sm)
-                                .size(22.dp),
+                var pickerOpen by remember { mutableStateOf(false) }
+                val isInteractive = onProviderSelected != null && savedProviders.size > 1
+
+                Row(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .clip(AppShape.small)
+                        .then(
+                            if (isInteractive) {
+                                Modifier.clickable { pickerOpen = true }
+                            } else {
+                                Modifier
+                            },
                         )
-                    }
+                        .padding(horizontal = AppSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isInteractive) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.cd_switch_provider),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(18.dp),
+                        )
+                    }
+                }
+
+                if (pickerOpen && savedProviders.isNotEmpty()) {
+                    NaraActionSheet(
+                        actions = savedProviders.map { provider ->
+                            NaraAction(
+                                label = provider.name,
+                                icon = AppIcons.Sparkle,
+                                trailing = provider.model,
+                                selected = if (provider.id == activeProvider?.id) true else null,
+                                onClick = {
+                                    if (provider.id != activeProvider?.id) {
+                                        onProviderSelected?.invoke(provider.id)
+                                    }
+                                },
+                            )
+                        },
+                        onDismiss = { pickerOpen = false },
                     )
                 }
             }
@@ -184,55 +188,4 @@ fun AssistantTopBar(
             }
         },
     )
-}
-
-/** The refined model indicator capsule with subtle border and status indicator. */
-@Composable
-private fun ModelSelectorCapsule(
-    label: String,
-    model: String?,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = AppShape.pill,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(
-                start = AppSpacing.md,
-                end = AppSpacing.sm,
-                top = 5.dp,
-                bottom = 5.dp,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-            )
-            Spacer(Modifier.width(AppSpacing.xs))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = stringResource(R.string.cd_switch_provider),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(start = 2.dp)
-                    .size(16.dp),
-            )
-        }
-    }
 }

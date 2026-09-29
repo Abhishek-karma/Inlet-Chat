@@ -1,6 +1,9 @@
 package com.assistant.app.data
 
+import com.assistant.app.llm.GeminiProvider
+import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.OpenAICompatibleProvider
+import com.assistant.app.ui.settings.isGemini
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,8 +39,22 @@ class LlmProviderCoordinator(
                     if (baseUrl.isBlank() || model.isBlank() || key.isNullOrBlank()) {
                         ChatLlmState.NeedsSetup
                     } else {
+                        val provider: LlmProvider = if (isGemini(baseUrl, active.name)) {
+                            GeminiProvider(
+                                client = httpClient,
+                                apiKey = key,
+                                model = model,
+                                baseUrl = if (baseUrl == "gemini" || baseUrl.isBlank()) {
+                                    GeminiProvider.DEFAULT_BASE_URL
+                                } else {
+                                    baseUrl
+                                },
+                            )
+                        } else {
+                            OpenAICompatibleProvider(httpClient, baseUrl, key, model)
+                        }
                         ChatLlmState.Ready(
-                            provider = OpenAICompatibleProvider(httpClient, baseUrl, key, model),
+                            provider = provider,
                             model = model,
                             providerId = active.id,
                             name = active.name,

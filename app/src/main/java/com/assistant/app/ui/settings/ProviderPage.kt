@@ -2,15 +2,15 @@ package com.assistant.app.ui.settings
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,11 +23,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,28 +74,80 @@ internal fun ProviderPage(
         return
     }
 
-    SettingsCard {
+    val activeProvider = state.providers.firstOrNull { it.isActive }
+    val otherProviders = state.providers.filter { !it.isActive }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         if (state.providers.isEmpty()) {
+            SettingsCard {
+                Text(
+                    text = stringResource(R.string.settings_provider_none),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(AppSpacing.lg),
+                )
+                SettingsDivider()
+                SettingsActionRow(
+                    label = stringResource(R.string.settings_add_provider),
+                    onClick = viewModel::startAdd,
+                )
+            }
+        } else {
+            // [ Active provider ]
             Text(
-                text = stringResource(R.string.settings_provider_none),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.settings_active_provider_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(AppSpacing.lg),
+                modifier = Modifier.padding(start = AppSpacing.xs, bottom = AppSpacing.xs),
             )
+            SettingsCard {
+                if (activeProvider != null) {
+                    ProviderRow(
+                        provider = activeProvider,
+                        onEdit = { viewModel.edit(activeProvider.id) },
+                        onActivate = {},
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.settings_provider_none),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(AppSpacing.lg),
+                    )
+                }
+            }
+
+            // [ Other configured providers ]
+            if (otherProviders.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(AppSpacing.md))
+                Text(
+                    text = stringResource(R.string.settings_other_providers_section),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = AppSpacing.xs, bottom = AppSpacing.xs),
+                )
+                SettingsCard {
+                    otherProviders.forEachIndexed { index, provider ->
+                        if (index > 0) SettingsDivider()
+                        ProviderRow(
+                            provider = provider,
+                            onEdit = { viewModel.edit(provider.id) },
+                            onActivate = { viewModel.activateProvider(provider.id) },
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(AppSpacing.md))
+            SettingsCard {
+                SettingsActionRow(
+                    label = stringResource(R.string.settings_add_provider),
+                    onClick = viewModel::startAdd,
+                )
+            }
         }
-        state.providers.forEachIndexed { index, provider ->
-            if (index > 0) SettingsDivider()
-            ProviderRow(
-                provider = provider,
-                onEdit = { viewModel.edit(provider.id) },
-                onActivate = { viewModel.activateProvider(provider.id) },
-            )
-        }
-        if (state.providers.isNotEmpty()) SettingsDivider()
-        SettingsActionRow(
-            label = stringResource(R.string.settings_add_provider),
-            onClick = viewModel::startAdd,
-        )
     }
 }
 
@@ -142,7 +198,7 @@ internal fun ProviderRow(
             Text(
                 text = provider.name,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -155,97 +211,193 @@ internal fun ProviderRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = stringResource(
-                if (provider.isActive) R.string.settings_provider_active else R.string.settings_provider_inactive,
-            ),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (provider.isActive) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
-        Icon(
-            painter = painterResource(AppIcons.ChevronRight),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(16.dp),
-        )
+        if (provider.isActive) {
+            Text(
+                text = stringResource(R.string.settings_provider_active),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = AppSpacing.xs),
+            )
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    painter = painterResource(AppIcons.ChevronRight),
+                    contentDescription = stringResource(R.string.settings_edit_provider),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.settings_provider_inactive),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = AppSpacing.xs),
+            )
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    painter = painterResource(AppIcons.ChevronRight),
+                    contentDescription = stringResource(R.string.settings_edit_provider),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProviderEditor(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
 ) {
+    val context = LocalContext.current
+    val isGeminiProvider = isGemini(state.baseUrl, state.name)
+    var providerDropdownExpanded by remember { mutableStateOf(false) }
+
+    val presetNames = listOf(
+        "Google Gemini",
+        "OpenAI",
+        "OpenRouter",
+        "Groq",
+        "Naga",
+        "OpenAI-compatible",
+    )
+
+    val currentProviderLabel = when {
+        isGeminiProvider -> "Google Gemini"
+        state.name.equals("OpenAI", ignoreCase = true) -> "OpenAI"
+        state.name.equals("OpenRouter", ignoreCase = true) -> "OpenRouter"
+        state.name.equals("Groq", ignoreCase = true) -> "Groq"
+        state.name.equals("Naga", ignoreCase = true) -> "Naga"
+        state.baseUrl.isNotBlank() && state.name.isNotBlank() -> state.name
+        else -> "OpenAI-compatible"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = AppSpacing.xs),
+            .padding(top = AppSpacing.xs, bottom = AppSpacing.xl),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
     ) {
-        if (state.editingId == null) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = AppSpacing.xs)) {
-                Text(
-                    text = stringResource(R.string.settings_quick_presets),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 2.dp, bottom = AppSpacing.xs),
-                )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
-                ) {
-                    ProviderPresets.forEach { preset ->
-                        Surface(
-                            onClick = {
-                                viewModel.fillPreset(preset.name, preset.baseUrl, preset.defaultModel)
-                            },
-                            shape = AppShape.pill,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                            ),
-                        ) {
+        // Provider Type Dropdown
+        ExposedDropdownMenuBox(
+            expanded = providerDropdownExpanded,
+            onExpandedChange = { if (!state.isSaving) providerDropdownExpanded = !providerDropdownExpanded },
+        ) {
+            OutlinedTextField(
+                value = currentProviderLabel,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(R.string.settings_provider_label)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerDropdownExpanded) },
+                shape = AppShape.small,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                enabled = !state.isSaving,
+            )
+            ExposedDropdownMenu(
+                expanded = providerDropdownExpanded,
+                onDismissRequest = { providerDropdownExpanded = false },
+            ) {
+                presetNames.forEach { label ->
+                    DropdownMenuItem(
+                        text = {
                             Text(
-                                text = preset.name,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (label == currentProviderLabel) FontWeight.Bold else FontWeight.Normal,
                             )
-                        }
-                    }
+                        },
+                        onClick = {
+                            providerDropdownExpanded = false
+                            when (label) {
+                                "Google Gemini" -> {
+                                    viewModel.fillPreset(
+                                        name = GEMINI_NAME,
+                                        baseUrl = GEMINI_BASE_URL,
+                                        defaultModel = GEMINI_DEFAULT_MODEL,
+                                    )
+                                }
+                                "OpenAI" -> {
+                                    viewModel.fillPreset(
+                                        name = "OpenAI",
+                                        baseUrl = "https://api.openai.com/v1",
+                                        defaultModel = "gpt-4o-mini",
+                                    )
+                                }
+                                "OpenRouter" -> {
+                                    viewModel.fillPreset(
+                                        name = "OpenRouter",
+                                        baseUrl = "https://openrouter.ai/api/v1",
+                                        defaultModel = "openai/gpt-4o-mini",
+                                    )
+                                }
+                                "Groq" -> {
+                                    viewModel.fillPreset(
+                                        name = "Groq",
+                                        baseUrl = "https://api.groq.com/openai/v1",
+                                        defaultModel = "llama-3.3-70b-versatile",
+                                    )
+                                }
+                                "Naga" -> {
+                                    viewModel.fillPreset(
+                                        name = "Naga",
+                                        baseUrl = "https://api.naga.ac/v1",
+                                        defaultModel = "dots-3-note-preview:free",
+                                    )
+                                }
+                                else -> {
+                                    // Custom OpenAI-compatible
+                                    viewModel.fillPreset(
+                                        name = "",
+                                        baseUrl = "",
+                                        defaultModel = "",
+                                    )
+                                }
+                            }
+                        },
+                    )
                 }
             }
         }
 
-        OutlinedTextField(
-            value = state.name,
-            onValueChange = viewModel::setName,
-            label = { Text(stringResource(R.string.settings_field_name)) },
-            singleLine = true,
-            shape = AppShape.small,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(SettingsNameFieldTag),
-            enabled = !state.isSaving,
-        )
-        OutlinedTextField(
-            value = state.baseUrl,
-            onValueChange = viewModel::setBaseUrl,
-            label = { Text(stringResource(R.string.settings_field_base_url)) },
-            singleLine = true,
-            shape = AppShape.small,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(SettingsBaseUrlFieldTag),
-            enabled = !state.isSaving,
-        )
+        // Only show Name field for custom/OpenAI-compatible providers when needed
+        if (!isGeminiProvider) {
+            OutlinedTextField(
+                value = state.name,
+                onValueChange = viewModel::setName,
+                label = { Text(stringResource(R.string.settings_field_name)) },
+                singleLine = true,
+                shape = AppShape.small,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsNameFieldTag),
+                enabled = !state.isSaving,
+            )
+
+            // Endpoint field (hidden for Gemini)
+            OutlinedTextField(
+                value = state.baseUrl,
+                onValueChange = viewModel::setBaseUrl,
+                label = { Text(stringResource(R.string.settings_field_endpoint)) },
+                singleLine = true,
+                shape = AppShape.small,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsBaseUrlFieldTag),
+                enabled = !state.isSaving,
+            )
+        }
+
+        // API Key field
         OutlinedTextField(
             value = state.apiKeyInput,
             onValueChange = viewModel::setApiKeyInput,
@@ -281,18 +433,34 @@ internal fun ProviderEditor(
                 .testTag(SettingsApiKeyFieldTag),
             enabled = !state.isSaving,
         )
-        var guideOpen by remember { mutableStateOf(false) }
-        SettingsNavRow(
-            label = stringResource(R.string.settings_provider_setup_guide),
-            icon = AppIcons.Info,
-            onClick = { guideOpen = true },
-        )
-        if (guideOpen) {
-            ProviderGuideDialog(
-                preset = presetForBaseUrl(state.baseUrl),
-                onDismiss = { guideOpen = false },
-            )
+
+        // API Key helper link
+        val keyUrl = if (isGeminiProvider) {
+            GEMINI_KEY_URL
+        } else {
+            presetForBaseUrl(state.baseUrl)?.keyUrl
         }
+        if (keyUrl != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(keyUrl)))
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_get_api_key),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
+
+        // Model field
         var modelSelectorOpen by remember { mutableStateOf(false) }
         OutlinedTextField(
             value = state.model,
@@ -316,6 +484,7 @@ internal fun ProviderEditor(
                 }
             },
         )
+
         if (modelSelectorOpen) {
             LaunchedEffect(state.baseUrl, state.storedKey, state.apiKeyInput) {
                 viewModel.loadModels()
@@ -330,40 +499,15 @@ internal fun ProviderEditor(
                 onDismiss = { modelSelectorOpen = false },
             )
         }
-        state.formError?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        Button(
-            onClick = viewModel::save,
-            enabled = state.isLoaded && !state.isSaving && state.formError == null,
-            shape = AppShape.pill,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (state.isSaving) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .padding(end = AppSpacing.sm),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-            Text(
-                stringResource(
-                    if (state.isSaving) R.string.settings_saving else R.string.settings_save,
-                ),
-            )
-        }
+
+        // Test connection button
         OutlinedButton(
             onClick = viewModel::testConnection,
             enabled = state.isLoaded && !state.isTesting && state.formError == null,
             shape = AppShape.pill,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
         ) {
             if (state.isTesting) {
                 CircularProgressIndicator(
@@ -383,14 +527,19 @@ internal fun ProviderEditor(
                 ),
             )
         }
+
+        // Connection outcome feedback
         state.connectionOutcome?.let { outcome ->
             val color = when (outcome) {
                 is ConnectionOutcome.Success -> MaterialTheme.colorScheme.primary
                 is ConnectionOutcome.Failure -> MaterialTheme.colorScheme.error
             }
             val text = when (outcome) {
-                is ConnectionOutcome.Success -> stringResource(R.string.settings_connection_success)
-                is ConnectionOutcome.Failure -> outcome.message
+                is ConnectionOutcome.Success -> {
+                    if (isGeminiProvider) stringResource(R.string.settings_gemini_connected)
+                    else stringResource(R.string.settings_connection_success)
+                }
+                is ConnectionOutcome.Failure -> "${stringResource(R.string.settings_connection_failed)}: ${outcome.message}"
             }
             Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
                 Text(
@@ -407,24 +556,65 @@ internal fun ProviderEditor(
                             .padding(top = 2.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f),
-                                shape = AppShape.small
+                                shape = AppShape.small,
                             )
-                            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+                            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
                     )
                 }
             }
         }
+
+        // Form error
+        state.formError?.let { error ->
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        // Save button
+        Button(
+            onClick = viewModel::save,
+            enabled = state.isLoaded && !state.isSaving && state.formError == null,
+            shape = AppShape.pill,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+        ) {
+            if (state.isSaving) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .padding(end = AppSpacing.sm),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+            Text(
+                stringResource(
+                    if (state.isSaving) R.string.settings_saving else R.string.settings_save,
+                ),
+            )
+        }
+
+        // Cancel / Delete actions
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextButton(onClick = viewModel::cancelEdit) {
+            TextButton(
+                onClick = viewModel::cancelEdit,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
                 Text(stringResource(R.string.settings_cancel))
             }
             if (state.editingId != null) {
                 TextButton(
                     onClick = { viewModel.delete(state.editingId) },
                     enabled = !state.isSaving,
+                    modifier = Modifier.heightIn(min = 48.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.settings_delete),
@@ -434,83 +624,4 @@ internal fun ProviderEditor(
             }
         }
     }
-}
-
-@Composable
-internal fun ProviderGuideDialog(preset: ProviderPreset?, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_provider_setup_guide)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-            ) {
-                listOf(
-                    R.string.settings_guide_step_1,
-                    R.string.settings_guide_step_2,
-                    R.string.settings_guide_step_3,
-                    R.string.settings_guide_step_4,
-                    R.string.settings_guide_step_5,
-                ).forEachIndexed { index, step ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            text = "${index + 1}.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(20.dp),
-                        )
-                        Text(
-                            text = stringResource(step),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Text(
-                    text = stringResource(R.string.settings_guide_key_use),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (preset == null) {
-                    Text(
-                        text = stringResource(R.string.settings_guide_own_endpoint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            if (preset != null) {
-                TextButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(preset.keyUrl)),
-                            )
-                        }
-                        onDismiss()
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_guide_open_page))
-                }
-            } else {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.settings_guide_close))
-                }
-            }
-        },
-        dismissButton = if (preset != null) {
-            {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.settings_guide_close))
-                }
-            }
-        } else {
-            null
-        },
-        shape = AppShape.medium,
-    )
 }

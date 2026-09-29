@@ -17,7 +17,7 @@ sealed interface ScriptedEvent {
 
     /** A reasoning delta, streamed like content. */
     data class Reasoning(val text: String) : ScriptedEvent
-    data class Fail(val error: ProviderError) : ScriptedEvent
+    data class Fail(val error: ProviderError, val detail: String? = null) : ScriptedEvent
 }
 
 /**
@@ -41,7 +41,7 @@ class FakeLlmProvider(var script: List<ScriptedEvent>) : LlmProvider {
                     is ScriptedEvent.Emit -> send(ChatChunk.Delta(event.text))
                     is ScriptedEvent.Reasoning -> send(ChatChunk.Reasoning(event.text))
                     is ScriptedEvent.Fail -> {
-                        send(ChatChunk.Failure(event.error))
+                        send(ChatChunk.Failure(event.error, event.detail))
                         return@launch
                     }
                 }

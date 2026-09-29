@@ -515,7 +515,6 @@ class ChatViewModelTest {
         val status = viewModel.uiState.value.status
         assertTrue(status is ChatStatus.Error)
         assertEquals(ProviderError.RateLimited.userMessage, (status as ChatStatus.Error).message)
-        assertEquals("Rate limit reached. Try again shortly.", status.message)
     }
 
     @Test

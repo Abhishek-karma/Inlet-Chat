@@ -156,7 +156,20 @@ class AppContainer(context: Context) {
             appPreferences = appPreferences,
             secureKeyStore = secureKeyStore,
             newTestProvider = { baseUrl: String, model: String, apiKey: String ->
-                OpenAICompatibleProvider(httpClient, baseUrl, apiKey, model)
+                if (com.assistant.app.ui.settings.isGemini(baseUrl)) {
+                    com.assistant.app.llm.GeminiProvider(
+                        client = httpClient,
+                        apiKey = apiKey,
+                        model = model,
+                        baseUrl = if (baseUrl == "gemini" || baseUrl.isBlank()) {
+                            com.assistant.app.llm.GeminiProvider.DEFAULT_BASE_URL
+                        } else {
+                            baseUrl
+                        },
+                    )
+                } else {
+                    OpenAICompatibleProvider(httpClient, baseUrl, apiKey, model)
+                }
             },
             newTestSearch = { endpoint: String, apiKey: String? ->
                 com.assistant.app.llm.SearXNGSearchProvider(httpClient, endpoint, apiKey).search("test", 1)

@@ -77,11 +77,15 @@ sealed interface ChatChunk {
 }
 
 enum class ProviderError(val userMessage: String) {
-    InvalidCredentials("API key was rejected. Check the key and try again."),
-    RateLimited("Rate limit reached. Try again shortly."),
-    NetworkUnavailable("Unable to connect. Check your network."),
-    Timeout("Request timed out."),
-    ServerError("Provider is unavailable."),
-    InvalidResponse("Provider returned an invalid response."),
-    Unknown("Something went wrong."),
+    InvalidCredentials("Invalid API key"),
+    AuthenticationFailed("Authentication failed"),
+    ModelNotFound("Model not found"),
+    QuotaExceeded("Quota exceeded"),
+    RateLimited("Rate limited"),
+    NetworkUnavailable("Network unavailable"),
+    Timeout("Request timed out"),
+    ServerError("Gemini service error"),
+    UnsupportedRequest("Unsupported request"),
+    InvalidResponse("Malformed response"),
+    Unknown("Something went wrong"),
 }
