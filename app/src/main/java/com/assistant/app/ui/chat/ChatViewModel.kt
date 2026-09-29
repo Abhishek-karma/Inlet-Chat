@@ -12,11 +12,17 @@ import com.assistant.app.data.ChatUiState
 import com.assistant.app.data.local.ConversationEntity
 import com.assistant.app.data.local.ProviderEntity
 import com.assistant.app.voice.VoiceInput
+import com.assistant.app.ui.history.ConversationSummary
 import com.assistant.app.voice.VoiceOutput
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -53,7 +59,23 @@ class ChatViewModel(
 
     val uiState: StateFlow<ChatUiState> = repository.uiState
     val chatLlm: StateFlow<ChatLlmState> = chatLlm
-    val conversations: Flow<List<ConversationEntity>> = repository.conversations
+    val conversations: StateFlow<List<ConversationEntity>> = repository.conversations
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
+
+    val conversationSummaries: StateFlow<List<ConversationSummary>> = repository.conversations
+        .map { list ->
+            list.map { ConversationSummary(it.id, it.title, it.updatedAt, it.pinned) }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
 
     val isVoiceInputAvailable: Boolean get() = voiceHandler.isVoiceInputAvailable
     val attachmentSupport: Boolean get() = attachmentIngester != null

@@ -44,6 +44,13 @@ import com.assistant.app.ui.components.AssistantTopBar
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
+@androidx.compose.runtime.Immutable
+internal data class SearchResultItem(
+    val id: String,
+    val title: String,
+    val timeText: String,
+)
+
 private const val RECENT_COUNT = 8
 
 /**
@@ -57,12 +64,24 @@ fun SearchScreen(
     onBack: (() -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    val now = remember { System.currentTimeMillis() }
     val results = remember(conversations, query) {
         val q = query.trim()
-        if (q.isEmpty()) {
+        val matches = if (q.isEmpty()) {
             conversations.take(RECENT_COUNT)
         } else {
             conversations.filter { it.title.contains(q, ignoreCase = true) }
+        }
+        matches.map {
+            SearchResultItem(
+                id = it.id,
+                title = it.title,
+                timeText = android.text.format.DateUtils.getRelativeTimeSpanString(
+                    it.updatedAt,
+                    now,
+                    android.text.format.DateUtils.DAY_IN_MILLIS,
+                ).toString(),
+            )
         }
     }
 
@@ -130,7 +149,7 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .padding(horizontal = AppSpacing.lg),
                 ) {
-                    items(results, key = { it.id }) { conversation ->
+                    items(results, key = { it.id }) { item ->
                         Surface(
                             shape = AppShape.small,
                             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -142,8 +161,8 @@ fun SearchScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(onClickLabel = conversation.title) {
-                                        onOpen(conversation.id)
+                                    .clickable(onClickLabel = item.title) {
+                                        onOpen(item.id)
                                     }
                                     .padding(horizontal = AppSpacing.md, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -168,13 +187,13 @@ fun SearchScreen(
                                         .padding(horizontal = AppSpacing.md),
                                 ) {
                                     Text(
-                                        text = conversation.title,
+                                        text = item.title,
                                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = searchTimestamp(conversation.updatedAt),
+                                        text = item.timeText,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -187,6 +206,3 @@ fun SearchScreen(
         }
     }
 }
-
-private fun searchTimestamp(updatedAt: Long): String =
-    android.text.format.DateUtils.getRelativeTimeSpanString(updatedAt).toString()

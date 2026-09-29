@@ -148,11 +148,9 @@ fun AssistantNavHost(
             }
         }
         composable(HISTORY_ROUTE) {
-            val conversations by chatViewModel.conversations.collectAsState(initial = emptyList())
+            val conversations by chatViewModel.conversationSummaries.collectAsState()
             HistoryScreen(
-                conversations = conversations.map {
-                    ConversationSummary(it.id, it.title, it.updatedAt, it.pinned)
-                },
+                conversations = conversations,
                 onOpen = { id ->
                     navController.navigate("$CHAT_ROUTE_BASE?$CONVERSATION_ID_ARG=$id") {
                         popUpTo(HISTORY_ROUTE) { inclusive = true }
@@ -167,11 +165,9 @@ fun AssistantNavHost(
             )
         }
         composable(SEARCH_ROUTE) {
-            val conversations by chatViewModel.conversations.collectAsState(initial = emptyList())
+            val conversations by chatViewModel.conversationSummaries.collectAsState()
             SearchScreen(
-                conversations = conversations.map {
-                    ConversationSummary(it.id, it.title, it.updatedAt, it.pinned)
-                },
+                conversations = conversations,
                 onOpen = { id ->
                     navController.navigate("$CHAT_ROUTE_BASE?$CONVERSATION_ID_ARG=$id") {
                         popUpTo(SEARCH_ROUTE) { inclusive = true }

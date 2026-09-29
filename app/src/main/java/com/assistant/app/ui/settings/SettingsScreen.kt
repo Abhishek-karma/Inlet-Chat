@@ -58,6 +58,9 @@ import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 import com.assistant.app.ui.theme.appTween
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 
 internal enum class SettingsGroup(val titleRes: Int) {
     Ai(R.string.settings_group_ai),
@@ -99,18 +102,33 @@ fun SettingsScreen(
             ""
         }
     }
-    var page by remember { mutableStateOf<SettingsPage?>(null) }
+    var pageStack by rememberSaveable(
+        stateSaver = listSaver<List<SettingsPage>, String>(
+            save = { list -> list.map { it.name } },
+            restore = { saved -> saved.mapNotNull { name -> runCatching { SettingsPage.valueOf(name) }.getOrNull() } },
+        ),
+    ) { mutableStateOf<List<SettingsPage>>(emptyList()) }
+
+    val page = pageStack.lastOrNull()
+
+    val handleBack: () -> Unit = {
+        if (pageStack.isNotEmpty()) {
+            pageStack = pageStack.dropLast(1)
+        } else {
+            onBack?.invoke()
+        }
+    }
+
+    BackHandler(enabled = pageStack.isNotEmpty()) {
+        handleBack()
+    }
 
     Scaffold(
         modifier = modifier,
         topBar = {
             AssistantTopBar(
                 title = stringResource(page?.titleRes ?: R.string.settings_title),
-                onBack = if (page != null) {
-                    { page = null }
-                } else {
-                    onBack
-                },
+                onBack = if (pageStack.isNotEmpty() || onBack != null) handleBack else null,
             )
         },
     ) { innerPadding ->
@@ -148,13 +166,13 @@ fun SettingsScreen(
                         null -> SettingsMenu(
                             state = state,
                             versionName = versionName,
-                            onOpen = { page = it },
+                            onOpen = { pageStack = pageStack + it },
                         )
                         SettingsPage.Provider -> ProviderPage(state = state, viewModel = viewModel)
                         SettingsPage.Voice -> VoicePage(state = state, viewModel = viewModel)
                         SettingsPage.Search -> SearchPage(state = state, viewModel = viewModel)
                         SettingsPage.Appearance -> AppearancePage(state = state, viewModel = viewModel)
-                        SettingsPage.About -> AboutPage(versionName = versionName) { page = it }
+                        SettingsPage.About -> AboutPage(versionName = versionName) { pageStack = pageStack + it }
                         SettingsPage.Privacy -> LegalPage(R.string.privacy_intro, PRIVACY_SECTIONS)
                         SettingsPage.Help -> HelpPage()
                         SettingsPage.Terms -> LegalPage(R.string.terms_intro, TERMS_SECTIONS)

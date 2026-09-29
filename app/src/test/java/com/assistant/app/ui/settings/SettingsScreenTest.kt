@@ -67,7 +67,7 @@ class SettingsScreenTest {
         db.close()
     }
 
-    private fun setContent(seedKey: String? = null) {
+    private fun setContent(seedKey: String? = null, onBack: (() -> Unit)? = null) {
         if (seedKey != null) {
             runBlocking {
                 providerStore.addProvider(
@@ -85,6 +85,7 @@ class SettingsScreenTest {
                         keyStore,
                         { _, _, _ -> FakeLlmProvider(listOf(ScriptedEvent.Emit("ok"))) },
                     ),
+                    onBack = onBack,
                 )
             }
         }
@@ -385,5 +386,74 @@ class SettingsScreenTest {
                 message.length > 30,
             )
         }
+    }
+
+    @Test
+    fun backFromSubpageReturnsToSettingsRoot() {
+        var chatBackCalled = false
+        setContent(onBack = { chatBackCalled = true })
+
+        // Open About page
+        openPage(context.getString(R.string.settings_section_about))
+        composeRule.onNodeWithText(context.getString(R.string.settings_about_description)).assertIsDisplayed()
+
+        // Tap back in TopBar
+        composeRule.onNodeWithContentDescription(context.getString(R.string.cd_back)).performClick()
+        composeRule.waitForIdle()
+
+        // Verifies returned to Settings root, not Chat
+        assertTrue("onBack should not be called when popping subpage", !chatBackCalled)
+        composeRule.onNodeWithText(context.getString(R.string.settings_section_provider)).assertIsDisplayed()
+
+        // Tap back on Settings root
+        composeRule.onNodeWithContentDescription(context.getString(R.string.cd_back)).performClick()
+        composeRule.waitForIdle()
+        assertTrue("onBack should be called when exiting settings root", chatBackCalled)
+    }
+
+    @Test
+    fun systemBackFromSubpageReturnsToSettingsRoot() {
+        var chatBackCalled = false
+        setContent(onBack = { chatBackCalled = true })
+
+        // Open Provider page
+        openPage(context.getString(R.string.settings_section_provider))
+        composeRule.onNodeWithText(context.getString(R.string.settings_provider_none)).assertIsDisplayed()
+
+        // Dispatch system back
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
+
+        // Verifies returned to Settings root
+        assertTrue("Chat onBack should not be invoked when subpage was popped", !chatBackCalled)
+        composeRule.onNodeWithText(context.getString(R.string.settings_section_provider)).assertIsDisplayed()
+    }
+
+    @Test
+    fun nestedSubpageNavigationRetainsStack() {
+        setContent()
+
+        // Settings -> About
+        openPage(context.getString(R.string.settings_section_about))
+        composeRule.onNodeWithText(context.getString(R.string.settings_about_description)).assertIsDisplayed()
+
+        // About -> Licenses
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(context.getString(R.string.settings_about_licenses)))
+        composeRule.onNodeWithText(context.getString(R.string.settings_about_licenses)).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(context.getString(R.string.licenses_intro)).assertIsDisplayed()
+
+        // Back from Licenses -> About
+        composeRule.onNodeWithContentDescription(context.getString(R.string.cd_back)).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(context.getString(R.string.settings_about_description)).assertIsDisplayed()
+
+        // Back from About -> Settings root
+        composeRule.onNodeWithContentDescription(context.getString(R.string.cd_back)).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(context.getString(R.string.settings_section_provider)).assertIsDisplayed()
     }
 }

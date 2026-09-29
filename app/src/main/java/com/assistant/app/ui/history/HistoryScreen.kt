@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +49,8 @@ import androidx.compose.ui.unit.sp
 import com.assistant.app.R
 import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.components.AssistantTopBar
-import com.assistant.app.ui.components.NaraAction
-import com.assistant.app.ui.components.NaraActionSheet
+import com.assistant.app.ui.components.InletAction
+import com.assistant.app.ui.components.InletActionSheet
 import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
@@ -61,11 +61,21 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
+@Immutable
 data class ConversationSummary(
     val id: String,
     val title: String,
     val updatedAt: Long,
     val pinned: Boolean = false,
+)
+
+@Immutable
+internal data class HistoryItem(
+    val id: String,
+    val title: String,
+    val updatedAt: Long,
+    val pinned: Boolean,
+    val formattedTime: String,
 )
 
 private const val GROUP_PINNED = 0
@@ -175,19 +185,32 @@ fun HistoryScreen(
                         .widthIn(max = AppDimens.maxContentWidth),
                     contentPadding = PaddingValues(bottom = AppSpacing.xxl),
                 ) {
-                    groups.forEach { (group, conversationsInGroup) ->
+                    groups.forEach { (group, itemsInGroup) ->
                         item(key = "header_$group") {
                             SectionHeader(stringResource(groupLabels[group]))
                         }
-                        items(conversationsInGroup, key = { it.id }) { conversation ->
+                        items(itemsInGroup, key = { it.id }) { item ->
                             ConversationRow(
-                                conversation = conversation,
-                                timeText = timestampText(conversation.updatedAt, group),
-                                onOpen = { onOpen(conversation.id) },
+                                item = item,
+                                onOpen = { onOpen(item.id) },
                                 onTogglePin = onTogglePin,
-                                onRequestRename = { renaming = conversation },
-                                onRequestShare = { share(conversation.id) },
-                                onRequestDelete = { pendingDelete = conversation },
+                                onRequestRename = {
+                                    renaming = ConversationSummary(
+                                        id = item.id,
+                                        title = item.title,
+                                        updatedAt = item.updatedAt,
+                                        pinned = item.pinned,
+                                    )
+                                },
+                                onRequestShare = { share(item.id) },
+                                onRequestDelete = {
+                                    pendingDelete = ConversationSummary(
+                                        id = item.id,
+                                        title = item.title,
+                                        updatedAt = item.updatedAt,
+                                        pinned = item.pinned,
+                                    )
+                                },
                             )
                         }
                     }
@@ -234,14 +257,18 @@ fun HistoryScreen(
 
 private fun groupConversations(
     conversations: List<ConversationSummary>,
-): List<Pair<Int, List<ConversationSummary>>> {
+): List<Pair<Int, List<HistoryItem>>> {
+    if (conversations.isEmpty()) return emptyList()
     val zone = ZoneId.systemDefault()
+    val now = System.currentTimeMillis()
     val today = LocalDate.now(zone)
     val todayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
     val yesterdayStart = today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     val weekStart = today.minusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
-    val buckets = List(groupLabels.size) { mutableListOf<ConversationSummary>() }
-    conversations.forEach { conversation ->
+    val todayFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+
+    val buckets = List(groupLabels.size) { mutableListOf<HistoryItem>() }
+    for (conversation in conversations) {
         val group = when {
             conversation.pinned -> GROUP_PINNED
             conversation.updatedAt >= todayStart -> GROUP_TODAY
@@ -249,21 +276,30 @@ private fun groupConversations(
             conversation.updatedAt >= weekStart -> GROUP_PREVIOUS_7_DAYS
             else -> GROUP_OLDER
         }
-        buckets[group].add(conversation)
+        val timeText = if (group == GROUP_TODAY) {
+            todayFormatter.format(Instant.ofEpochMilli(conversation.updatedAt))
+        } else {
+            DateUtils.getRelativeTimeSpanString(
+                conversation.updatedAt,
+                now,
+                DateUtils.DAY_IN_MILLIS,
+            ).toString()
+        }
+        buckets[group].add(
+            HistoryItem(
+                id = conversation.id,
+                title = conversation.title,
+                updatedAt = conversation.updatedAt,
+                pinned = conversation.pinned,
+                formattedTime = timeText,
+            ),
+        )
     }
     return buckets
         .withIndex()
         .filter { it.value.isNotEmpty() }
         .map { it.index to it.value.toList() }
 }
-
-private fun timestampText(updatedAt: Long, group: Int): String =
-    if (group == GROUP_TODAY) {
-        DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
-            .format(Instant.ofEpochMilli(updatedAt).atZone(ZoneId.systemDefault()))
-    } else {
-        DateUtils.getRelativeTimeSpanString(updatedAt).toString()
-    }
 
 @Composable
 private fun SectionHeader(text: String) {
@@ -321,8 +357,7 @@ private fun RenameDialog(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
-    conversation: ConversationSummary,
-    timeText: String,
+    item: HistoryItem,
     onOpen: () -> Unit,
     onTogglePin: (String, Boolean) -> Unit,
     onRequestRename: () -> Unit,
@@ -354,7 +389,7 @@ private fun ConversationRow(
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(
-                            if (conversation.pinned) {
+                            if (item.pinned) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
                                 MaterialTheme.colorScheme.surfaceContainerHigh
@@ -363,9 +398,9 @@ private fun ConversationRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        painter = painterResource(if (conversation.pinned) AppIcons.Pin else AppIcons.Chat),
+                        painter = painterResource(if (item.pinned) AppIcons.Pin else AppIcons.Chat),
                         contentDescription = null,
-                        tint = if (conversation.pinned) {
+                        tint = if (item.pinned) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -380,7 +415,7 @@ private fun ConversationRow(
                         .padding(horizontal = AppSpacing.md),
                 ) {
                     Text(
-                        text = conversation.title,
+                        text = item.title,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -388,7 +423,7 @@ private fun ConversationRow(
                 }
 
                 Text(
-                    text = timeText,
+                    text = item.formattedTime,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 )
@@ -396,26 +431,26 @@ private fun ConversationRow(
         }
 
         if (menuOpen) {
-            NaraActionSheet(
+            InletActionSheet(
                 actions = listOf(
-                    NaraAction(
+                    InletAction(
                         label = stringResource(
-                            if (conversation.pinned) R.string.menu_unpin else R.string.menu_pin,
+                            if (item.pinned) R.string.menu_unpin else R.string.menu_pin,
                         ),
                         icon = AppIcons.Pin,
-                        onClick = { onTogglePin(conversation.id, !conversation.pinned) },
+                        onClick = { onTogglePin(item.id, !item.pinned) },
                     ),
-                    NaraAction(
+                    InletAction(
                         label = stringResource(R.string.menu_rename),
                         icon = AppIcons.Edit,
                         onClick = onRequestRename,
                     ),
-                    NaraAction(
+                    InletAction(
                         label = stringResource(R.string.menu_share),
                         icon = AppIcons.Share,
                         onClick = onRequestShare,
                     ),
-                    NaraAction(
+                    InletAction(
                         label = stringResource(R.string.menu_delete),
                         icon = AppIcons.Trash,
                         onClick = onRequestDelete,
