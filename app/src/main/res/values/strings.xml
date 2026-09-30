@@ -237,6 +237,25 @@
     <string name="settings_about_terms">Terms of service</string>
     <string name="settings_about_licenses">Open source licenses</string>
     <string name="settings_about_help">Help &amp; support</string>
+    <string name="settings_check_for_updates">Check for updates</string>
+    <string name="settings_check_for_updates_desc">Tap to check GitHub releases</string>
+    <string name="settings_update_checking">Checking for updates…</string>
+    <string name="settings_update_up_to_date">Inlet Chat is up to date</string>
+    <string name="settings_update_available">Update available</string>
+    <string name="settings_update_available_version">Version %1$s is available</string>
+    <string name="settings_update_failed">Couldn\'t check for updates</string>
+    <string name="settings_update_auto_check">Auto-check updates</string>
+    <string name="settings_update_auto_check_desc">Check GitHub releases in background</string>
+    <string name="settings_update_download">Download APK</string>
+    <string name="settings_update_view_release">View on GitHub</string>
+    <string name="settings_update_dismiss">Later</string>
+    <string name="settings_update_dialog_title">Update Available</string>
+    <string name="settings_update_dialog_version">Version %1$s is available (current: %2$s).</string>
+    <string name="settings_update_dialog_release_notes">Release notes</string>
+    <string name="update_notification_channel_name">App updates</string>
+    <string name="update_notification_channel_desc">Notifications when a new version of Inlet Chat is available</string>
+    <string name="update_notification_title">Inlet Chat %1$s available</string>
+    <string name="update_notification_body">Version %1$s is available to download.</string>
 
     <!-- Privacy policy -->
     <string name="settings_section_privacy">Privacy</string>

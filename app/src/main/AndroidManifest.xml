@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Voice input (mic tap only; no background listening). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- App update notifications when a new release is published. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- The voice-output availability probe checks for TTS engines (Android 11
          package visibility: without this the probe sees no engines). -->

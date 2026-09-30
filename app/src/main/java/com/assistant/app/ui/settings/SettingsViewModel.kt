@@ -16,6 +16,8 @@ import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ProviderError
 import com.assistant.app.llm.ProviderModelsClient
 import com.assistant.app.llm.model.Role
+import com.assistant.app.data.update.UpdateManager
+import com.assistant.app.data.update.model.UpdateStatus
 import com.assistant.app.voice.VoiceOption
 import com.assistant.app.voice.VoiceOutput
 import kotlinx.coroutines.CancellationException
@@ -73,6 +75,9 @@ data class SettingsUiState(
     val isTesting: Boolean = false,
     val formError: String? = null,
     val connectionOutcome: ConnectionOutcome? = null,
+    val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val autoCheckUpdates: Boolean = true,
+    val showUpdateDialog: Boolean = false,
 ) {
     override fun toString(): String =
         "SettingsUiState(providers=$providers, isEditing=$isEditing, editingId=$editingId, " +
@@ -97,6 +102,7 @@ class SettingsViewModel(
     private val voiceOutput: VoiceOutput? = null,
     private val connectionTestDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val updateManager: UpdateManager? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(ttsAvailable = ttsAvailable))
@@ -135,6 +141,23 @@ class SettingsViewModel(
                             ProviderSummary(provider.id, provider.name, provider.model, provider.isActive)
                         },
                     )
+                }
+            }
+        }
+        if (updateManager != null) {
+            viewModelScope.launch {
+                updateManager.updateStatus.collect { status ->
+                    _uiState.update {
+                        it.copy(
+                            updateStatus = status,
+                            showUpdateDialog = status is UpdateStatus.Available,
+                        )
+                    }
+                }
+            }
+            viewModelScope.launch {
+                updateManager.autoCheckUpdates.collect { autoCheck ->
+                    _uiState.update { it.copy(autoCheckUpdates = autoCheck) }
                 }
             }
         }
@@ -507,6 +530,24 @@ class SettingsViewModel(
         revalidate()
     }
 
+    fun checkForUpdates() {
+        val manager = updateManager ?: return
+        viewModelScope.launch {
+            manager.checkForUpdates(manual = true)
+        }
+    }
+
+    fun setAutoCheckUpdates(enabled: Boolean) {
+        val manager = updateManager ?: return
+        viewModelScope.launch {
+            manager.setAutoCheckUpdates(enabled)
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _uiState.update { it.copy(showUpdateDialog = false) }
+    }
+
     private fun revalidate() {
         validationJob?.cancel()
         validationJob = viewModelScope.launch {
@@ -525,6 +566,7 @@ class SettingsViewModel(
         private val modelsClient: ProviderModelsClient = ProviderModelsClient(),
         private val ttsAvailable: Boolean = true,
         private val voiceOutput: VoiceOutput? = null,
+        private val updateManager: UpdateManager? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -539,6 +581,7 @@ class SettingsViewModel(
                 modelsClient,
                 ttsAvailable,
                 voiceOutput,
+                updateManager = updateManager,
             ) as T
         }
     }

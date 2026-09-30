@@ -137,6 +137,29 @@ class AppPreferences(
         }
     }
 
+    /** Whether to automatically check for app updates. True by default. */
+    val autoCheckUpdates: Flow<Boolean> = dataStore.data.map { prefs -> prefs[KEY_AUTO_CHECK_UPDATES] ?: true }
+
+    suspend fun setAutoCheckUpdates(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_AUTO_CHECK_UPDATES] = enabled }
+    }
+
+    /** Timestamp of the last update check in milliseconds. */
+    val lastUpdateCheckTime: Flow<Long> = dataStore.data.map { prefs -> prefs[KEY_LAST_UPDATE_CHECK_TIME] ?: 0L }
+
+    suspend fun setLastUpdateCheckTime(timestamp: Long) {
+        dataStore.edit { prefs -> prefs[KEY_LAST_UPDATE_CHECK_TIME] = timestamp }
+    }
+
+    /** Last version for which an update notification was shown to the user. */
+    val lastNotifiedVersion: Flow<String?> = dataStore.data.map { prefs -> prefs[KEY_LAST_NOTIFIED_VERSION] }
+
+    suspend fun setLastNotifiedVersion(version: String?) {
+        dataStore.edit { prefs ->
+            if (version.isNullOrBlank()) prefs.remove(KEY_LAST_NOTIFIED_VERSION) else prefs[KEY_LAST_NOTIFIED_VERSION] = version
+        }
+    }
+
     /**
  * The pre-1.2 single provider configuration, or null once it has been
  * migrated into the provider store (or never existed).
@@ -203,6 +226,9 @@ class AppPreferences(
         private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val KEY_VOICE_SPEED = floatPreferencesKey("voice_speed")
         private val KEY_VOICE_ID = stringPreferencesKey("voice_id")
+        private val KEY_AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
+        private val KEY_LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
+        private val KEY_LAST_NOTIFIED_VERSION = stringPreferencesKey("last_notified_version")
 
         const val DEFAULT_VOICE_SPEED = 1.0f
         const val MIN_VOICE_SPEED = 0.5f

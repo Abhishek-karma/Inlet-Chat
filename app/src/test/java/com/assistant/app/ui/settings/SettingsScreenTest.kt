@@ -225,6 +225,9 @@ class SettingsScreenTest {
         composeRule.onNode(hasScrollAction())
             .performScrollToNode(hasText("1.0.0"))
         composeRule.onNodeWithText("1.0.0").assertIsDisplayed()
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(context.getString(R.string.settings_check_for_updates)))
+        composeRule.onNodeWithText(context.getString(R.string.settings_check_for_updates)).assertIsDisplayed()
     }
 
     @Test

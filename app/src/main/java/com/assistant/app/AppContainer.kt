@@ -16,6 +16,11 @@ import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.EncryptedSecureKeyStore
 import com.assistant.app.data.settings.SecureKeyStore
 import com.assistant.app.data.settings.TextSize
+import com.assistant.app.data.update.AndroidUpdateNotifier
+import com.assistant.app.data.update.GitHubUpdateChecker
+import com.assistant.app.data.update.UpdateChecker
+import com.assistant.app.data.update.UpdateManager
+import com.assistant.app.data.update.UpdateNotifier
 import com.assistant.app.llm.DuckDuckGoSearchProvider
 import com.assistant.app.llm.HttpPageFetcher
 import com.assistant.app.llm.JsoupContentExtractor
@@ -146,6 +151,29 @@ class AppContainer(context: Context) {
         )
     }
 
+    val updateChecker: UpdateChecker by lazy {
+        GitHubUpdateChecker(httpClient)
+    }
+
+    val updateNotifier: UpdateNotifier by lazy {
+        AndroidUpdateNotifier(context)
+    }
+
+    val updateManager: UpdateManager by lazy {
+        val appVersionName = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+        } catch (_: Exception) {
+            "1.0.0"
+        }
+        UpdateManager(
+            currentVersion = appVersionName,
+            updateChecker = updateChecker,
+            updateNotifier = updateNotifier,
+            appPreferences = appPreferences,
+            scope = appScope,
+        )
+    }
+
     fun settingsViewModelFactory(): ViewModelProvider.Factory =
         SettingsViewModel.Factory(
             providerStore = providerStore,
@@ -169,5 +197,6 @@ class AppContainer(context: Context) {
             },
             ttsAvailable = voiceOutput.isAvailable,
             voiceOutput = voiceOutput,
+            updateManager = updateManager,
         )
 }

@@ -169,7 +169,13 @@ fun SettingsScreen(
                         SettingsPage.Provider -> ProviderPage(state = state, viewModel = viewModel)
                         SettingsPage.Voice -> VoicePage(state = state, viewModel = viewModel)
                         SettingsPage.Appearance -> AppearancePage(state = state, viewModel = viewModel)
-                        SettingsPage.About -> AboutPage(versionName = versionName) { pageStack = pageStack + it }
+                        SettingsPage.About -> AboutPage(
+                            versionName = versionName,
+                            state = state,
+                            onCheckForUpdates = viewModel::checkForUpdates,
+                            onToggleAutoCheckUpdates = viewModel::setAutoCheckUpdates,
+                            onDismissUpdateDialog = viewModel::dismissUpdateDialog,
+                        ) { pageStack = pageStack + it }
                         SettingsPage.Privacy -> LegalPage(R.string.privacy_intro, PRIVACY_SECTIONS)
                         SettingsPage.Help -> HelpPage()
                         SettingsPage.Terms -> LegalPage(R.string.terms_intro, TERMS_SECTIONS)
