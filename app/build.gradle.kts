@@ -6,7 +6,13 @@ plugins {
 }
 
 import org.gradle.api.artifacts.ResolvedArtifact
+import java.util.Properties
 import java.util.zip.ZipFile
+
+// Release signing comes from keystore.properties (gitignored, written by CI or locally);
+// when the file is absent the release build stays unsigned.
+val keystoreProperties = Properties()
+rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { keystoreProperties.load(it) }
 
 android {
     namespace = "com.assistant.app"
@@ -27,6 +33,14 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        if (keystoreProperties.isNotEmpty()) {
+            create("releaseConfig") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -36,6 +50,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (keystoreProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("releaseConfig")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

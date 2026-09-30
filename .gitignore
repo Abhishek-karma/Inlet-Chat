@@ -12,6 +12,7 @@ captures/
 
 # Local
 local.properties
+keystore.properties
 .kotlin/
 
 # Local docs

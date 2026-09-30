@@ -1,6 +1,7 @@
 # Inlet Chat
 
-[![Release](https://github.com/Abhishek-karma/Repo/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/Repo/actions/workflows/release.yml)
+[![CI](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml)
+[![Release](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml)
 
 A minimal Android AI chat application focused on reliable, private conversation with OpenAI-compatible providers.
 
@@ -117,4 +118,6 @@ The following behaviors additionally require verification on a real device:
 
 A release is cut only after the full release checklist passes, including real-device smoke testing.
 
-Pushing a tag matching `v*` (for example `v1.0.0`) triggers the release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml). The workflow runs the unit tests, builds the minified release APK, and publishes a GitHub release with the APK attached.
+Pushing a tag matching `v*` (for example `v1.0.0`) triggers the release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml). The workflow runs the release unit tests and lint, builds the minified release APK, verifies its signature, and publishes a GitHub release with the APK and its SHA-256 checksum attached.
+
+Releases are signed. The workflow reads four repository secrets — `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` — and writes them to a temporary `keystore.properties` that the build reads; the file is cleaned up afterwards and is gitignored. Locally, creating a `keystore.properties` at the repository root with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword` signs local release builds the same way; without it, release builds stay unsigned.
