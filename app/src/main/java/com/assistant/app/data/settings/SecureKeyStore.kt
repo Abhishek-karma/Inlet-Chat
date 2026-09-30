@@ -1,5 +1,6 @@
 package com.assistant.app.data.settings
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -56,6 +57,7 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
      * between the write and the async disk flush would leave the user with a
      * provider that cannot authenticate and no way to tell why.
      */
+    @SuppressLint("ApplySharedPref")
     override fun setApiKey(id: Long, value: String?) {
         val prefs = preferences ?: return
         prefs.edit().apply {
@@ -65,6 +67,7 @@ class EncryptedSecureKeyStore(context: Context) : SecureKeyStore {
 
     override fun legacyApiKey(): String? = preferences?.getString(KEY_API_KEY, null)
 
+    @SuppressLint("ApplySharedPref")
     override fun deleteLegacyApiKey() {
         preferences?.edit()?.remove(KEY_API_KEY)?.commit()
     }

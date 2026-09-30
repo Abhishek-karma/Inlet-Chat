@@ -215,8 +215,6 @@
     <string name="settings_group_data">Data &amp; privacy</string>
     <string name="settings_group_support">Support</string>
     <string name="settings_group_about">About</string>
-    <string name="legal_todo_header">Before release</string>
-    <string name="legal_todo_label">Needs publisher input</string>
 
     <!-- Provider setup -->
     <string name="settings_provider_inactive">Tap to use</string>
@@ -255,7 +253,6 @@
     <string name="privacy_analytics_body">This build contains no analytics, advertising, or crash-reporting SDK. The only network destinations are the provider endpoint, the configured search service, and pages reached through web search.</string>
     <string name="privacy_deletion_title">Deleting your data</string>
     <string name="privacy_deletion_body">Deleting a conversation in History removes its messages and its copied attachment files from the device. Deleting a provider removes its stored key. Uninstalling the app removes its private storage. Data already sent to a third-party provider or search service is outside this app\'s control — use that provider\'s own deletion tools.</string>
-    <string name="legal_todo_privacy">TODO(legal): the publishing entity, contact address, jurisdiction, and any required sub-processor or retention details are not defined in this project and must be completed by the publisher before release.</string>
 
     <!-- Terms of service -->
     <string name="settings_section_terms">Terms</string>
@@ -274,7 +271,6 @@
     <string name="terms_availability_body">The app is provided as is, without warranty. Features may change or be removed, and the app may be discontinued at any time.</string>
     <string name="terms_conduct_title">Your responsibility</string>
     <string name="terms_conduct_body">You are responsible for the content you send, for complying with your provider\'s terms, and for the law that applies to your use.</string>
-    <string name="legal_todo_terms">TODO(legal): publisher identity, governing law, jurisdiction, liability limits, and a contact address are not defined in this project and must be completed by the publisher before release.</string>
 
     <!-- Open source licenses -->
     <string name="settings_section_licenses">Licenses</string>
@@ -304,5 +300,5 @@
     <string name="help_search_title">Web search problems</string>
     <string name="help_search_body">Web search must be toggled on in the conversation, using the globe button in the composer. It needs no account or API key, but the search service can rate-limit or block automated requests; a rate-limit notice means the answer was still produced, just without web results.</string>
     <string name="help_contact_title">Report a problem</string>
-    <string name="help_contact_body">TODO(support): no issue tracker, support address, or community link is defined for this project. Add a real destination here before release — do not ship a placeholder address.</string>
+    <string name="help_contact_body">Inlet Chat is open source. You can report bugs, request features, or view known issues on GitHub at github.com/Abhishek-karma/Inlet-Chat/issues.</string>
 </resources>

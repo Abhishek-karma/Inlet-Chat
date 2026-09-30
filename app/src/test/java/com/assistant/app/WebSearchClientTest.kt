@@ -246,4 +246,58 @@ class WebSearchClientTest {
         assertEquals("Page 1", result.title)
         assertEquals("Original search snippet text", result.snippet)
     }
+
+    @Test
+    fun `page fetcher follows legitimate redirect within limit`() {
+        val fetcher = HttpPageFetcher(
+            client = OkHttpClient(),
+            dispatcher = Dispatchers.Unconfined,
+            allowPrivateHosts = true,
+        )
+        val finalUrl = server.url("/destination")
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(302)
+                .setHeader("Location", finalUrl.toString()),
+        )
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/plain")
+                .setBody("Redirected article content"),
+        )
+
+        val result = runBlocking { fetcher.fetch(server.url("/start").toString()) }
+        assertEquals("Redirected article content", result)
+    }
+
+    @Test
+    fun `page fetcher blocks redirect to private address when allowPrivateHosts is false`() {
+        val fetcher = HttpPageFetcher(
+            client = OkHttpClient(),
+            dispatcher = Dispatchers.Unconfined,
+            allowPrivateHosts = false,
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(302)
+                .setHeader("Location", "http://127.0.0.1:8080/secret"),
+        )
+
+        val result = runBlocking { fetcher.fetch(server.url("/start").toString()) }
+        assertNull(result)
+    }
+
+    @Test
+    fun `isBlockedHostOrIp detects private and loopback addresses`() {
+        val fetcher = HttpPageFetcher(
+            client = OkHttpClient(),
+            dispatcher = Dispatchers.Unconfined,
+        )
+        assertTrue(fetcher.isBlockedHostOrIp("127.0.0.1"))
+        assertTrue(fetcher.isBlockedHostOrIp("localhost"))
+        assertTrue(fetcher.isBlockedHostOrIp("192.168.1.1"))
+        assertTrue(fetcher.isBlockedHostOrIp("10.0.0.1"))
+        assertTrue(fetcher.isBlockedHostOrIp("169.254.169.254"))
+        assertTrue(fetcher.isBlockedHostOrIp("router.local"))
+    }
 }

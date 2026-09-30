@@ -290,11 +290,11 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun legalGapsAreMarkedNotFinished() {
+    fun privacyPageIncludesLocalAndSearchSections() {
         setContent()
         openPage(context.getString(R.string.settings_section_privacy))
-        assertSectionOnPage(R.string.legal_todo_label)
-        assertSectionOnPage(R.string.legal_todo_privacy)
+        assertSectionOnPage(R.string.privacy_local_title)
+        assertSectionOnPage(R.string.privacy_search_title)
     }
 
     @Test
@@ -304,7 +304,7 @@ class SettingsScreenTest {
         assertSectionOnPage(R.string.terms_byok_title)
         assertSectionOnPage(R.string.terms_providers_title)
         assertSectionOnPage(R.string.terms_cost_title)
-        assertSectionOnPage(R.string.legal_todo_terms)
+        assertSectionOnPage(R.string.terms_search_title)
     }
 
     @Test

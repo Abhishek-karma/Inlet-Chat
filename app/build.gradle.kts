@@ -234,5 +234,5 @@ dependencies {
     testImplementation(libs.mockwebserver)
     testImplementation(libs.compose.ui.test.junit4)
 
-    implementation(libs.compose.ui.test.manifest)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

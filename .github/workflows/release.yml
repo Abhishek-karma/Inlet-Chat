@@ -63,7 +63,7 @@ jobs:
           echo "Configured for Tag: $TAG (Version: $VERSION)"
 
       - name: Run Unit Tests
-        run: ./gradlew testReleaseUnitTest
+        run: ./gradlew testDebugUnitTest
 
       - name: Run Android Lint
         run: ./gradlew lint

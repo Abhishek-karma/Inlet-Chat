@@ -5,7 +5,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.assistant.app.R
-import com.assistant.app.ui.components.AppIcons
 
 internal data class LegalSection(val titleRes: Int, val bodyRes: Int)
 
@@ -45,16 +44,6 @@ internal fun LegalPage(introRes: Int, sections: List<LegalSection>) {
             text = stringResource(section.bodyRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    SettingsSectionHeader(text = stringResource(R.string.legal_todo_header))
-    SettingsCard {
-        SettingsRow(
-            label = stringResource(R.string.legal_todo_label),
-            icon = AppIcons.Flag,
-            description = stringResource(
-                if (sections === TERMS_SECTIONS) R.string.legal_todo_terms else R.string.legal_todo_privacy,
-            ),
         )
     }
 }
