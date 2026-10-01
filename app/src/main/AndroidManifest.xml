@@ -39,9 +39,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name="androidx.activity.ComponentActivity"
-            android:exported="true" />
 
         <!-- Shares camera captures with the camera app for attachment photos
              not exported, granted per request only. -->

@@ -222,9 +222,12 @@ class SettingsScreenTest {
         openPage(context.getString(R.string.settings_section_about))
         val versionLabel = context.getString(R.string.settings_version)
         composeRule.onNodeWithText(versionLabel).assertIsDisplayed()
+        // Read the version like SettingsScreen does, so the test follows the build config.
+        val versionName = context.packageManager
+            .getPackageInfo(context.packageName, 0).versionName ?: ""
         composeRule.onNode(hasScrollAction())
-            .performScrollToNode(hasText("1.0.0"))
-        composeRule.onNodeWithText("1.0.0").assertIsDisplayed()
+            .performScrollToNode(hasText(versionName))
+        composeRule.onNodeWithText(versionName).assertIsDisplayed()
         composeRule.onNode(hasScrollAction())
             .performScrollToNode(hasText(context.getString(R.string.settings_check_for_updates)))
         composeRule.onNodeWithText(context.getString(R.string.settings_check_for_updates)).assertIsDisplayed()

@@ -13,9 +13,10 @@ captures/
 # Local
 local.properties
 keystore.properties
+.env
 *.keystore
 *.jks
-*-base64.txt
+debug.keystore.base64
 .signing_secrets
 .kotlin/
 
