@@ -47,8 +47,11 @@ class FollowUpIntegrationTest {
 
     @After
     fun tearDown() {
+        database?.close()
         Dispatchers.resetMain()
     }
+
+    private var database: ChatDatabase? = null
 
     private val directExecutor = Executor { it.run() }
 
@@ -56,33 +59,28 @@ class FollowUpIntegrationTest {
         script: List<ScriptedEvent>,
         followUpSuggestions: (suspend (LlmProvider, String, String, String) -> List<String>)? = null,
         block: suspend TestScope.(ChatViewModel, FakeLlmProvider, ChatRepository, ConversationStore) -> Unit,
-    ): TestResult {
+    ): TestResult = runTest {
         val db = Room
             .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), ChatDatabase::class.java)
             .setQueryExecutor(directExecutor)
             .setTransactionExecutor(directExecutor)
             .allowMainThreadQueries()
             .build()
+        database = db
         val store = ConversationStore(db)
-        try {
-            return runTest {
-                val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
-                Dispatchers.setMain(mainDispatcher)
-                val provider = FakeLlmProvider(script)
-                val chatLlm = MutableStateFlow<ChatLlmState>(ChatLlmState.Ready(provider, "test-model"))
-                val repository = ChatRepository(
-                    chatLlm = chatLlm,
-                    generationDispatcher = mainDispatcher,
-                    store = store,
-                    followUpSuggestions = followUpSuggestions,
-                    clock = { testScheduler.currentTime },
-                )
-                val viewModel = ChatViewModel(repository, chatLlm)
-                block(viewModel, provider, repository, store)
-            }
-        } finally {
-            db.close()
-        }
+        val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(mainDispatcher)
+        val provider = FakeLlmProvider(script)
+        val chatLlm = MutableStateFlow<ChatLlmState>(ChatLlmState.Ready(provider, "test-model"))
+        val repository = ChatRepository(
+            chatLlm = chatLlm,
+            generationDispatcher = mainDispatcher,
+            store = store,
+            followUpSuggestions = followUpSuggestions,
+            clock = { testScheduler.currentTime },
+        )
+        val viewModel = ChatViewModel(repository, chatLlm)
+        block(viewModel, provider, repository, store)
     }
 
     @Test

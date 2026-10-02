@@ -50,8 +50,11 @@ class ChatPersistenceTest {
 
     @After
     fun tearDown() {
+        database?.close()
         Dispatchers.resetMain()
     }
+
+    private var database: ChatDatabase? = null
 
     /**
      * Runs Room's query and transaction work inline on the calling thread
@@ -70,32 +73,27 @@ class ChatPersistenceTest {
         script: List<ScriptedEvent>,
         attachmentsDir: File? = null,
         block: suspend TestScope.(ChatViewModel, FakeLlmProvider, ChatRepository, ConversationStore) -> Unit,
-    ): TestResult {
+    ): TestResult = runTest {
         val db = Room
             .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), ChatDatabase::class.java)
             .setQueryExecutor(directExecutor)
             .setTransactionExecutor(directExecutor)
             .allowMainThreadQueries()
             .build()
+        database = db
         val store = ConversationStore(db)
-        try {
-            return runTest {
-                val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
-                Dispatchers.setMain(mainDispatcher)
-                val provider = FakeLlmProvider(script)
-                val chatLlm = MutableStateFlow(ChatLlmState.Ready(provider, SECRET_MARKER_MODEL))
-                val repository = ChatRepository(
-                    chatLlm = chatLlm,
-                    generationDispatcher = mainDispatcher,
-                    store = store,
-                    clock = { testScheduler.currentTime },
-                    attachmentsDir = attachmentsDir,
-                )
-                block(ChatViewModel(repository, chatLlm), provider, repository, store)
-            }
-        } finally {
-            db.close()
-        }
+        val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(mainDispatcher)
+        val provider = FakeLlmProvider(script)
+        val chatLlm = MutableStateFlow(ChatLlmState.Ready(provider, SECRET_MARKER_MODEL))
+        val repository = ChatRepository(
+            chatLlm = chatLlm,
+            generationDispatcher = mainDispatcher,
+            store = store,
+            clock = { testScheduler.currentTime },
+            attachmentsDir = attachmentsDir,
+        )
+        block(ChatViewModel(repository, chatLlm), provider, repository, store)
     }
 
     private val helloScript = listOf(
