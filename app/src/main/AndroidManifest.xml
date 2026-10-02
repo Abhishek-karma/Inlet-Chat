@@ -39,6 +39,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Required by Robolectric unit tests, which launch ComponentActivity
+             directly; unexported so it is unreachable from other apps. -->
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="false"
+            tools:replace="android:exported" />
 
         <!-- Shares camera captures with the camera app for attachment photos
              not exported, granted per request only. -->
