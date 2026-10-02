@@ -41,17 +41,25 @@ class UpdateCheckerTest {
     )
 
     @Test
+    fun `default endpoint points to L0 repository`() {
+        assertEquals(
+            "https://api.github.com/repos/Abhishek-karma/L0/releases/latest",
+            GitHubUpdateChecker.DEFAULT_ENDPOINT,
+        )
+    }
+
+    @Test
     fun `when newer release exists returns UpdateCheckResult Available`() {
         val json = """
             {
                 "tag_name": "v1.2.0",
                 "name": "Version 1.2.0 Release",
                 "body": "Fixed web search and added updates",
-                "html_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/tag/v1.2.0",
+                "html_url": "https://github.com/Abhishek-karma/L0/releases/tag/v1.2.0",
                 "assets": [
                     {
                         "name": "L0-1.2.0.apk",
-                        "browser_download_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/L0-1.2.0.apk"
+                        "browser_download_url": "https://github.com/Abhishek-karma/L0/releases/download/v1.2.0/L0-1.2.0.apk"
                     }
                 ]
             }
@@ -67,7 +75,7 @@ class UpdateCheckerTest {
         assertEquals("Version 1.2.0 Release", available.updateInfo.releaseTitle)
         assertEquals("Fixed web search and added updates", available.updateInfo.releaseNotes)
         assertEquals(
-            "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/L0-1.2.0.apk",
+            "https://github.com/Abhishek-karma/L0/releases/download/v1.2.0/L0-1.2.0.apk",
             available.updateInfo.downloadUrl,
         )
     }
@@ -79,7 +87,7 @@ class UpdateCheckerTest {
                 "tag_name": "v1.0.0",
                 "name": "Initial Release",
                 "body": "First public release",
-                "html_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/tag/v1.0.0",
+                "html_url": "https://github.com/Abhishek-karma/L0/releases/tag/v1.0.0",
                 "assets": []
             }
         """.trimIndent()

@@ -28,7 +28,7 @@ android {
         targetSdk = 35
         // Overridden by the release workflow from the pushed tag.
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = project.findProperty("versionName") as String? ?: "1.0.0"
+        versionName = project.findProperty("versionName") as String? ?: "0.0.1"
     }
 
     signingConfigs {

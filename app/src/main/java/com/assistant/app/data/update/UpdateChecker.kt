@@ -90,7 +90,7 @@ class GitHubUpdateChecker(
 
     companion object {
         const val REPO_OWNER = "Abhishek-karma"
-        const val REPO_NAME = "Inlet-Chat"
+        const val REPO_NAME = "L0"
         const val DEFAULT_ENDPOINT = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
     }
 }

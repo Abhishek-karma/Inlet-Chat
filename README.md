@@ -1,7 +1,7 @@
 # L0
 
-[![CI](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml)
-[![Release](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml)
+[![CI](https://github.com/Abhishek-karma/L0/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhishek-karma/L0/actions/workflows/ci.yml)
+[![Release](https://github.com/Abhishek-karma/L0/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/L0/actions/workflows/release.yml)
 
 A minimal, private Android AI chat client focused on fast token-level streaming with OpenAI-compatible and Google Gemini providers.
 
@@ -39,7 +39,7 @@ L0 communicates directly from the Android device to the configured AI provider e
 ## Requirements
 
 - Android 8.0+ (API level 26 minimum, API level 35 target)
-- JDK 17 or JDK 21
+- JDK 17
 - Gradle 8.13+ / Android Gradle Plugin 8.9+
 
 ## Building and Testing
@@ -70,7 +70,7 @@ Build minified release APK:
 
 GitHub Actions workflows:
 - **CI** (`.github/workflows/ci.yml`): Runs lint, unit tests, and builds `L0-debug.apk` on pushes and pull requests to `main`.
-- **Release** (`.github/workflows/release.yml`): Triggered by pushing a version tag (e.g. `v1.2.0`) or manual dispatch. Runs release unit tests, lint, signs the release APK, verifies signature with `apksigner`, computes SHA-256 checksums, and attaches `L0-<version>.apk` to the GitHub release.
+- **Release** (`.github/workflows/release.yml`): Triggered by pushing a version tag (e.g. `v0.0.1`) or manual dispatch. Runs release unit tests, lint, signs the release APK, verifies signature with `apksigner`, computes SHA-256 checksums, and attaches `L0-<version>.apk` to the GitHub release.
 
 For local signed release builds, configure `keystore.properties` at the repository root with:
 ```properties

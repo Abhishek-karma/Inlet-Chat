@@ -319,5 +319,5 @@
     <string name="help_search_title">Web search problems</string>
     <string name="help_search_body">Web search must be toggled on in the conversation, using the globe button in the composer. It needs no account or API key, but the search service can rate-limit or block automated requests; a rate-limit notice means the answer was still produced, just without web results.</string>
     <string name="help_contact_title">Report a problem</string>
-    <string name="help_contact_body">L0 is open source. You can report bugs, request features, or view known issues on GitHub at github.com/Abhishek-karma/Inlet-Chat/issues.</string>
+    <string name="help_contact_body">L0 is open source. You can report bugs, request features, or view known issues on GitHub at github.com/Abhishek-karma/L0/issues.</string>
 </resources>
