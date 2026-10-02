@@ -396,6 +396,7 @@ fun ChatScreen(
                 onAttachClick = { showAttachSheet = true },
                 searchActive = state.searchEnabled,
                 onToggleSearch = viewModel::toggleSearch,
+                topPadding = if (suggestions.isNotEmpty()) AppSpacing.xxs else AppSpacing.sm,
             )
         }
     }
@@ -555,7 +556,12 @@ fun ChatScreen(
                         if (suggestions.isNotEmpty()) {
                             SuggestionsRow(
                                 suggestions = suggestions,
-                                onSelect = viewModel::setDraft,
+                                onSelect = { suggestion ->
+                                    viewModel.setDraft(suggestion)
+                                    if (state.voiceHint) viewModel.dismissVoiceHint()
+                                    if (state.attachmentError != null) viewModel.dismissAttachmentError()
+                                    if (state.searchNotice != null) viewModel.dismissSearchNotice()
+                                },
                             )
                         }
                     }

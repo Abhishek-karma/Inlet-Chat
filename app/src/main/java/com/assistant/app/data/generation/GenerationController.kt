@@ -131,6 +131,10 @@ class GenerationController(
         }
 
         val result = failure
+        if (!session.job.isActive) {
+            clearSession(session.generationId)
+            return
+        }
         if (result == null) {
             clearSession(session.generationId)
             onPersist()

@@ -123,6 +123,7 @@ fun Composer(
     onAttachClick: (() -> Unit)? = null,
     searchActive: Boolean = false,
     onToggleSearch: (() -> Unit)? = null,
+    topPadding: androidx.compose.ui.unit.Dp = AppSpacing.sm,
 ) {
     val haptics = rememberHaptics()
     val isNotBlank = value.isNotBlank()
@@ -139,7 +140,12 @@ fun Composer(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+            .padding(
+                start = AppSpacing.md,
+                end = AppSpacing.md,
+                top = topPadding,
+                bottom = AppSpacing.sm,
+            ),
         shape = AppShape.composer,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, borderCol),

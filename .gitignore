@@ -30,4 +30,7 @@ Thumbs.db
 
 # Tools
 .superpowers/
-stitch_application_interface_builder/
+stitch_application_interface_builder/-e 
+# AI Studio local
+metadata.json
+.env.example

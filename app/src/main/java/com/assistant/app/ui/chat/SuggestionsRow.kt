@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
+import androidx.compose.ui.platform.testTag
+
 /**
  * Horizontally scrollable chips for follow-up prompt suggestions.
  */
@@ -28,7 +30,7 @@ fun SuggestionsRow(
     LazyRow(
         modifier = modifier
             .readingColumn()
-            .padding(bottom = AppSpacing.xs),
+            .padding(top = 0.dp, bottom = 0.dp),
         contentPadding = PaddingValues(horizontal = AppSpacing.lg),
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
     ) {
@@ -38,6 +40,7 @@ fun SuggestionsRow(
                 shape = AppShape.pill,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.testTag("suggestion_chip"),
             ) {
                 Text(
                     text = suggestion,

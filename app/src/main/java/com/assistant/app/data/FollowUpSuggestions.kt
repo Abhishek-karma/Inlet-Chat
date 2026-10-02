@@ -18,11 +18,55 @@ object FollowUpSuggestions {
     const val TIMEOUT_MS = 6_000L
     const val MAX_ITEMS = 2
 
-    /** Below this an answer is too brief to suggest anything worth asking. */
-    const val MIN_ANSWER_CHARS = 180
+    private val ACKNOWLEDGEMENT_REGEX = Regex(
+        "^(?i)(?:ok|okay|sure|got it|i see|done|all set|you're welcome|you are welcome|no problem|not at all|happy to help|anytime|understood|thanks|thank you|hello|hi|good morning|good afternoon|good evening)[.!]?$"
+    )
 
-    fun isWorthSuggesting(answer: String): Boolean =
-        answer.trim().length >= MIN_ANSWER_CHARS
+    private val KNOWN_SHORT_ACKNOWLEDGEMENTS = setOf(
+        "sure, i can help with that.",
+        "sure, i can help with that!",
+        "sure, i'd be happy to help.",
+        "i understand.",
+        "i understand completely.",
+        "glad i could help!",
+        "let me know if you need anything else.",
+        "i'm ready when you are.",
+    )
+
+    /**
+     * Determines whether an answer is substantive enough to suggest follow-up questions.
+     * - Disqualifies empty or blank answers
+     * - Disqualifies trivial conversational acknowledgements
+     * - Disqualifies error/failure messages
+     * - Allows concise, useful factual/informative answers
+     * - Reliably allows normal length answers without an arbitrary cliff
+     */
+    fun isWorthSuggesting(answer: String): Boolean {
+        val trimmed = answer.trim()
+        if (trimmed.isEmpty() || trimmed.length < 12) return false
+        if (isErrorOrRefusal(trimmed)) return false
+        if (isAcknowledgement(trimmed)) return false
+        return true
+    }
+
+    internal fun isAcknowledgement(text: String): Boolean {
+        val clean = text.trim()
+        if (ACKNOWLEDGEMENT_REGEX.matches(clean)) return true
+        if (clean.length <= 40 && clean.lowercase() in KNOWN_SHORT_ACKNOWLEDGEMENTS) return true
+        return false
+    }
+
+    internal fun isErrorOrRefusal(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.startsWith("error:") ||
+            lower.startsWith("something went wrong") ||
+            lower.startsWith("request timed out") ||
+            lower.startsWith("network unavailable") ||
+            lower.startsWith("quota exceeded") ||
+            lower.startsWith("rate limited") ||
+            lower.startsWith("invalid api key") ||
+            lower.startsWith("authentication failed")
+    }
 
     suspend fun generate(
         provider: LlmProvider,
@@ -55,9 +99,73 @@ object FollowUpSuggestions {
         return parse(text.toString())
     }
 
-    /** Line-wise: strips bullets/numbering, drops blanks, caps at [MAX_ITEMS]. */
-    internal fun parse(raw: String): List<String> = raw.lines()
-        .map { it.trim().replace(Regex("^\\s*(?:[-*\u2022]|\\d+[.)])\\s*"), "") }
-        .filter { it.isNotEmpty() }
-        .take(MAX_ITEMS)
+    /**
+     * Parses and normalizes LLM-generated follow-up questions.
+     * Handles:
+     * - Numbered lines (1. Question?, 1) Question?, 1 - Question?)
+     * - Bulleted lines (- Question?, * Question?, • Question?)
+     * - Wrapping quotes, markdown bold/italics
+     * - Code fences and markdown headings
+     * - Preamble meta lines (e.g. "Here are some suggestions:")
+     * - Trailing meta text (e.g. "Hope this helps!")
+     * - Case-insensitive deduplication
+     * - Length validation and cap at [MAX_ITEMS]
+     */
+    internal fun parse(raw: String): List<String> {
+        val lines = raw.lines()
+        val result = mutableListOf<String>()
+        val seenNormalized = mutableSetOf<String>()
+        var insideCodeBlock = false
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+
+            if (trimmed.startsWith("```")) {
+                insideCodeBlock = !insideCodeBlock
+                continue
+            }
+            if (insideCodeBlock) continue
+            if (trimmed.startsWith("#")) continue
+            if (isPreambleOrMeta(trimmed)) continue
+
+            val cleaned = cleanSuggestionLine(trimmed)
+            if (cleaned.length < 5 || cleaned.length > 180) continue
+            if (isMetaText(cleaned)) continue
+
+            val normalizedKey = cleaned.lowercase().replace(Regex("[^a-z0-9]"), "")
+            if (normalizedKey.isNotEmpty() && seenNormalized.add(normalizedKey)) {
+                result.add(cleaned)
+                if (result.size >= MAX_ITEMS) break
+            }
+        }
+        return result
+    }
+
+    private fun isPreambleOrMeta(line: String): Boolean {
+        val lower = line.lowercase()
+        return (lower.endsWith(":") && (lower.contains("suggest") || lower.contains("question") || lower.contains("follow"))) ||
+            lower.startsWith("here are") ||
+            lower.startsWith("certainly") ||
+            lower.startsWith("sure, here") ||
+            lower.contains("follow-up question") ||
+            lower.contains("questions you might") ||
+            lower.contains("questions you could ask") ||
+            lower.contains("hope this helps") ||
+            lower.contains("feel free to ask") ||
+            lower.contains("let me know if")
+    }
+
+    private fun isMetaText(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower in setOf("none", "n/a", "no suggestions", "no questions", "no follow-ups")
+    }
+
+    private fun cleanSuggestionLine(line: String): String {
+        var text = line.trim()
+        text = text.replace(Regex("^\\s*(?:[\\-*•–—+]|\\d+[.)\\-:])\\s*"), "")
+        text = text.replace(Regex("^[*_]+"), "").replace(Regex("[*_]+$"), "")
+        text = text.replace(Regex("^[\"\'“”«]+"), "").replace(Regex("[\"\'“”»]+$"), "")
+        return text.trim()
+    }
 }

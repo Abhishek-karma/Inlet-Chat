@@ -698,6 +698,7 @@ class ChatViewModelTest {
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChatSearchTest {
 
     @After

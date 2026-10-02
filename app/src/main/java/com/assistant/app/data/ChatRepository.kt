@@ -62,6 +62,14 @@ class ChatRepository(
     /** The failed generation's message id while it is still shown with an error. */
     private var failedAssistantId: String? = null
 
+    /** In-flight follow-up suggestions coroutine job. */
+    private var followUpJob: Job? = null
+
+    private fun cancelFollowUp() {
+        followUpJob?.cancel()
+        followUpJob = null
+    }
+
     /** True while a send is waiting on web search, before generation starts. */
     private var searching = false
 
@@ -193,6 +201,7 @@ class ChatRepository(
     }
 
     fun stop() {
+        cancelFollowUp()
         generationController.stop()
     }
 
@@ -204,6 +213,7 @@ class ChatRepository(
         ) {
             return
         }
+        cancelFollowUp()
         cleanupFailedAssistantMessage()
         val job = currentCoroutineContext().job
         try {
@@ -292,6 +302,7 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
+        cancelFollowUp()
         cleanupFailedAssistantMessage()
         if (_uiState.value.messages.none { it.role == Role.USER }) return
         appendAssistantPlaceholderAndGenerate(currentCoroutineContext().job)
@@ -311,16 +322,22 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
+        cancelFollowUp()
         val job = currentCoroutineContext().job
         versionStore.snapshotVersion(last.id, state.messages) { transform ->
             _uiState.update { s -> s.copy(messages = transform(s.messages)) }
         }
         _uiState.update { s ->
             s.copy(messages = s.messages.map { m ->
-                if (m.id == last.id) m.copy(content = "", reasoning = "") else m
+                if (m.id == last.id) m.copy(content = "", reasoning = "", followUps = emptyList()) else m
             })
         }
-        store?.let { s -> state.conversationId?.let { s.updateMessageContent(last.id, "", "", now()) } }
+        store?.let { s ->
+            state.conversationId?.let {
+                s.updateMessageContent(last.id, "", "", now())
+                s.updateFollowUps(last.id, null)
+            }
+        }
         startGeneration(llm, last.id, job)
     }
 
@@ -351,6 +368,7 @@ class ChatRepository(
             refuseWithoutLlm()
             return
         }
+        cancelFollowUp()
         val job = currentCoroutineContext().job
         val current = _uiState.value
         val index = current.messages.indexOfFirst { it.id == messageId && it.role == Role.USER }
@@ -371,6 +389,7 @@ class ChatRepository(
     }
 
     fun newConversation() {
+        cancelFollowUp()
         stop()
         stashIfNoStore()
         failedAssistantId = null
@@ -392,6 +411,7 @@ class ChatRepository(
 
     suspend fun openConversation(id: String) {
         if (_uiState.value.conversationId == id) return
+        cancelFollowUp()
         stop()
         generationController.joinActive()
         stashIfNoStore()
@@ -422,6 +442,7 @@ class ChatRepository(
                     attachments = attachmentsById[entity.id].orEmpty(),
                     reasoning = entity.reasoning,
                     sources = searchResultsFromJson(entity.sources),
+                    followUps = entity.followUps?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
                 )
             }
             ?: conversationSnapshots[id].orEmpty()
@@ -453,6 +474,7 @@ class ChatRepository(
 
     suspend fun deleteConversation(id: String) {
         if (_uiState.value.conversationId == id) {
+            cancelFollowUp()
             stop()
             failedAssistantId = null
             discardStagedAttachments()
@@ -486,6 +508,7 @@ class ChatRepository(
         job: Job,
     ) {
         val targetConversationId = _uiState.value.conversationId ?: return
+        cancelFollowUp()
         val session = generationController.tryStartSession(targetConversationId, assistantId, job)
             ?: return
 
@@ -551,28 +574,41 @@ class ChatRepository(
     ) {
         val suggester = followUpSuggestions ?: return
         if (_uiState.value.conversationId != targetConversationId) return
-        val answer = _uiState.value.messages.firstOrNull { it.id == assistantId }?.content.orEmpty()
+        val current = _uiState.value.messages.firstOrNull { it.id == assistantId } ?: return
+        val answer = current.content
         if (question.isBlank() || !FollowUpSuggestions.isWorthSuggesting(answer)) return
-        val suggestions = try {
-            withTimeout(FollowUpSuggestions.TIMEOUT_MS) {
-                suggester(llm.provider, llm.model, question, answer)
+
+        followUpJob = currentCoroutineContext().job
+        try {
+            val suggestions = try {
+                withTimeout(FollowUpSuggestions.TIMEOUT_MS) {
+                    suggester(llm.provider, llm.model, question, answer)
+                }
+            } catch (_: TimeoutCancellationException) {
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return
             }
-        } catch (_: TimeoutCancellationException) {
-            return
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            return
-        }
-        if (suggestions.isEmpty()) return
-        if (_uiState.value.conversationId == targetConversationId) {
+            if (suggestions.isEmpty()) return
+
+            if (_uiState.value.conversationId != targetConversationId) return
+            val latestMessage = _uiState.value.messages.firstOrNull { it.id == assistantId }
+            if (latestMessage == null || latestMessage.content != answer) return
+
             _uiState.update { s ->
+                if (s.conversationId != targetConversationId) return@update s
                 s.copy(messages = s.messages.map { m ->
-                    if (m.id == assistantId) m.copy(followUps = suggestions) else m
+                    if (m.id == assistantId && m.content == answer) m.copy(followUps = suggestions) else m
                 })
             }
+            store?.updateFollowUps(assistantId, suggestions.joinToString("\n"))
+        } finally {
+            if (followUpJob === currentCoroutineContext().job) {
+                followUpJob = null
+            }
         }
-        store?.updateFollowUps(assistantId, suggestions.joinToString("\n            "))
     }
 
     private suspend fun appendAssistantPlaceholderAndGenerate(job: Job) {
@@ -723,6 +759,9 @@ class ChatRepository(
         content = content,
         createdAt = createdAt,
         selectedVersion = selectedVersion,
+        followUps = followUps.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+        reasoning = reasoning,
+        sources = sources.takeIf { it.isNotEmpty() }?.toSearchJson(),
     )
 
     private fun newId(): String = UUID.randomUUID().toString()

@@ -103,7 +103,12 @@ fun MessageList(
             .widthIn(max = AppDimens.maxContentWidth),
         state = listState,
         reverseLayout = true,
-        contentPadding = PaddingValues(horizontal = AppSpacing.lg, vertical = AppSpacing.lg),
+        contentPadding = PaddingValues(
+            start = AppSpacing.lg,
+            end = AppSpacing.lg,
+            top = AppSpacing.lg,
+            bottom = AppSpacing.sm,
+        ),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.xl),
     ) {
 
