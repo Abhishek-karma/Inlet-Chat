@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Inlet Chat</string>
+    <string name="app_name">L0</string>
 
     <!-- Home greeting and empty state. -->
     <string name="greeting_morning">Good morning</string>
@@ -226,7 +226,7 @@
     <string name="settings_guide_step_3">Create a new key and copy it.</string>
     <string name="settings_guide_step_4">Paste it into the API key field above.</string>
     <string name="settings_guide_step_5">Choose a model, test the connection, then save.</string>
-    <string name="settings_guide_key_use">Inlet Chat stores the key on this device in encrypted storage and sends it only to the provider endpoint you configure. Anyone with access to the unlocked device can read it, so treat it like a password.</string>
+    <string name="settings_guide_key_use">L0 stores the key on this device in encrypted storage and sends it only to the provider endpoint you configure. Anyone with access to the unlocked device can read it, so treat it like a password.</string>
     <string name="settings_guide_open_page">Open provider page</string>
     <string name="settings_guide_close">Close</string>
     <string name="settings_guide_own_endpoint">This endpoint is not one of the presets. Get the key and the base URL from whoever operates this service.</string>
@@ -240,7 +240,7 @@
     <string name="settings_check_for_updates">Check for updates</string>
     <string name="settings_check_for_updates_desc">Tap to check GitHub releases</string>
     <string name="settings_update_checking">Checking for updates…</string>
-    <string name="settings_update_up_to_date">Inlet Chat is up to date</string>
+    <string name="settings_update_up_to_date">L0 is up to date</string>
     <string name="settings_update_available">Update available</string>
     <string name="settings_update_available_version">Version %1$s is available</string>
     <string name="settings_update_failed">Couldn\'t check for updates</string>
@@ -253,8 +253,8 @@
     <string name="settings_update_dialog_version">Version %1$s is available (current: %2$s).</string>
     <string name="settings_update_dialog_release_notes">Release notes</string>
     <string name="update_notification_channel_name">App updates</string>
-    <string name="update_notification_channel_desc">Notifications when a new version of Inlet Chat is available</string>
-    <string name="update_notification_title">Inlet Chat %1$s available</string>
+    <string name="update_notification_channel_desc">Notifications when a new version of L0 is available</string>
+    <string name="update_notification_title">L0 %1$s available</string>
     <string name="update_notification_body">Version %1$s is available to download.</string>
 
     <!-- Privacy policy -->
@@ -263,7 +263,7 @@
     <string name="privacy_local_title">Stored on this device</string>
     <string name="privacy_local_body">• Conversations, messages, and attachment references are stored in the app\'s own database.\n• Attached images and text files are copied into the app\'s private files directory. Images are downscaled when they are added.\n• Preferences such as theme, text size, and voice are stored locally.\n• API keys are stored in encrypted preferences backed by the Android keystore. Android backup is turned off for this app, so keys are not copied to a device backup.</string>
     <string name="privacy_provider_title">Sent to your AI provider</string>
-    <string name="privacy_provider_body">When you send a message, the app sends it, the conversation context, your selected model, and your API key to the provider endpoint you configured. Attached images are sent as image data; attached text files are inlined into the message. Responses stream back. Inlet Chat has no server in between: the provider receives the request directly from your device, and that provider\'s own retention and training practices apply to it.</string>
+    <string name="privacy_provider_body">When you send a message, the app sends it, the conversation context, your selected model, and your API key to the provider endpoint you configured. Attached images are sent as image data; attached text files are inlined into the message. Responses stream back. L0 has no server in between: the provider receives the request directly from your device, and that provider\'s own retention and training practices apply to it.</string>
     <string name="privacy_search_title">Web search</string>
     <string name="privacy_search_body">If you turn on web search, your message is sent to the search service, and the pages it returns are fetched so their text can be used as context. That service and the fetched sites are third parties.</string>
     <string name="privacy_voice_title">Voice</string>
@@ -275,13 +275,13 @@
 
     <!-- Terms of service -->
     <string name="settings_section_terms">Terms</string>
-    <string name="terms_intro">These terms cover your use of Inlet Chat. They describe the product as built and have not been reviewed by a lawyer.</string>
+    <string name="terms_intro">These terms cover your use of L0. They describe the product as built and have not been reviewed by a lawyer.</string>
     <string name="terms_byok_title">You provide the API key</string>
-    <string name="terms_byok_body">Inlet Chat has no model of its own. You supply credentials for a third-party AI provider, you are responsible for that key, and you must have the provider\'s permission to use it. Revoke the key at the provider if you stop using it.</string>
+    <string name="terms_byok_body">L0 has no model of its own. You supply credentials for a third-party AI provider, you are responsible for that key, and you must have the provider\'s permission to use it. Revoke the key at the provider if you stop using it.</string>
     <string name="terms_providers_title">Third-party providers</string>
-    <string name="terms_providers_body">Answers, model names, availability, and data handling are determined by the provider you configure. Inlet Chat does not control them and does not guarantee their output, accuracy, or uptime.</string>
+    <string name="terms_providers_body">Answers, model names, availability, and data handling are determined by the provider you configure. L0 does not control them and does not guarantee their output, accuracy, or uptime.</string>
     <string name="terms_cost_title">Costs</string>
-    <string name="terms_cost_body">Usage is billed by your provider, not by this app. Inlet Chat makes no payments and sets no limits on your provider account. You are responsible for any charges your usage incurs.</string>
+    <string name="terms_cost_body">Usage is billed by your provider, not by this app. L0 makes no payments and sets no limits on your provider account. You are responsible for any charges your usage incurs.</string>
     <string name="terms_content_title">AI-generated content</string>
     <string name="terms_content_body">Model output can be wrong, biased, or harmful. Do not rely on it for medical, legal, financial, or safety-critical decisions, and review anything you act on.</string>
     <string name="terms_search_title">Web search limits</string>
@@ -299,7 +299,7 @@
 
     <!-- Help & support -->
     <string name="settings_section_help">Help</string>
-    <string name="help_intro">Short answers for the things that usually go wrong. Inlet Chat has no account system, so everything below is something you configure yourself.</string>
+    <string name="help_intro">Short answers for the things that usually go wrong. L0 has no account system, so everything below is something you configure yourself.</string>
     <string name="help_add_provider_title">Add a provider</string>
     <string name="help_add_provider_body">Open Settings → Provider → Add provider. Pick a preset to fill the name, endpoint, and a starting model, paste your API key, run Test connection, then Save. The first provider you save becomes the active one.</string>
     <string name="help_api_key_title">Where to get an API key</string>
@@ -319,5 +319,5 @@
     <string name="help_search_title">Web search problems</string>
     <string name="help_search_body">Web search must be toggled on in the conversation, using the globe button in the composer. It needs no account or API key, but the search service can rate-limit or block automated requests; a rate-limit notice means the answer was still produced, just without web results.</string>
     <string name="help_contact_title">Report a problem</string>
-    <string name="help_contact_body">Inlet Chat is open source. You can report bugs, request features, or view known issues on GitHub at github.com/Abhishek-karma/Inlet-Chat/issues.</string>
+    <string name="help_contact_body">L0 is open source. You can report bugs, request features, or view known issues on GitHub at github.com/Abhishek-karma/Inlet-Chat/issues.</string>
 </resources>

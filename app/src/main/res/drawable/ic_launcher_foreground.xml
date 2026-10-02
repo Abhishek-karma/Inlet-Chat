@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Canonical Adaptive Icon Foreground: 108dp x 108dp canvas.
-    The 24-unit mark is scaled 2.4x and centred at (54, 54), giving a 43.2dp
-    mark whose corner radius is 30.5dp: inside the 36dp launcher mask and well
-    inside the 33dp guaranteed-visible safe circle.
+    L0 Canonical Adaptive Icon Foreground: 108dp x 108dp canvas.
+    Scaled 2.4x and centred at (54, 54), comfortably inside the 33dp safe circle.
+    Minimal, bold pure white geometry on dark obsidian slate.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -15,8 +14,13 @@
         android:scaleY="2.4"
         android:translateX="25.2"
         android:translateY="25.2">
+        <!-- L -->
         <path
-            android:pathData="M3,3 L9,3 L9,16 L15,16 L15,7 L21,7 L21,21 L3,21 Z"
-            android:fillColor="#00696B" />
+            android:pathData="M 5.5,4 L 6.5,4 C 7.33,4 8,4.67 8,5.5 L 8,14.8 C 8,15.46 8.54,16 9.2,16 L 18.5,16 C 19.33,16 20,16.67 20,17.5 L 20,18.5 C 20,19.33 19.33,20 18.5,20 L 5.5,20 C 4.67,20 4,19.33 4,18.5 L 4,5.5 C 4,4.67 4.67,4 5.5,4 Z"
+            android:fillColor="#FFFFFF" />
+        <!-- Zero -->
+        <path
+            android:pathData="M 14.5,5.3 C 16.82,5.3 18.7,7.18 18.7,9.5 C 18.7,11.82 16.82,13.7 14.5,13.7 C 12.18,13.7 10.3,11.82 10.3,9.5 C 10.3,7.18 12.18,5.3 14.5,5.3 Z M 14.5,7.6 C 13.45,7.6 12.6,8.45 12.6,9.5 C 12.6,10.55 13.45,11.4 14.5,11.4 C 15.55,11.4 16.4,10.55 16.4,9.5 C 16.4,8.45 15.55,7.6 14.5,7.6 Z"
+            android:fillColor="#FFFFFF" />
     </group>
 </vector>

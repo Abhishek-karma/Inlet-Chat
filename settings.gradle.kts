@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Inlet Chat"
+rootProject.name = "L0"
 include(":app")
