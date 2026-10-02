@@ -50,8 +50,8 @@ class UpdateCheckerTest {
                 "html_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/tag/v1.2.0",
                 "assets": [
                     {
-                        "name": "InletChat-1.2.0.apk",
-                        "browser_download_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/InletChat-1.2.0.apk"
+                        "name": "L0-1.2.0.apk",
+                        "browser_download_url": "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/L0-1.2.0.apk"
                     }
                 ]
             }
@@ -67,7 +67,7 @@ class UpdateCheckerTest {
         assertEquals("Version 1.2.0 Release", available.updateInfo.releaseTitle)
         assertEquals("Fixed web search and added updates", available.updateInfo.releaseNotes)
         assertEquals(
-            "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/InletChat-1.2.0.apk",
+            "https://github.com/Abhishek-karma/Inlet-Chat/releases/download/v1.2.0/L0-1.2.0.apk",
             available.updateInfo.downloadUrl,
         )
     }

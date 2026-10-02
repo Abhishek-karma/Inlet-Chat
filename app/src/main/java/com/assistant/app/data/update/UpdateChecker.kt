@@ -25,7 +25,7 @@ class GitHubUpdateChecker(
         val request = Request.Builder()
             .url(endpoint)
             .header("Accept", "application/vnd.github.v3+json")
-            .header("User-Agent", "InletChat/$currentVersion")
+            .header("User-Agent", "L0/$currentVersion")
             .build()
 
         try {

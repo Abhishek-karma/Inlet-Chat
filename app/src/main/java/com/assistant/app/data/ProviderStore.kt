@@ -77,10 +77,37 @@ class ProviderStore(
         } else {
             draft.baseUrl.trim()
         }
-        if (!isHttpUrl(normalizedUrl)) return ERROR_BASE_URL_INVALID
+        val uri = try {
+            URI(normalizedUrl)
+        } catch (_: URISyntaxException) {
+            return ERROR_BASE_URL_INVALID
+        }
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host
+        if ((scheme != "http" && scheme != "https") || host.isNullOrBlank()) {
+            return ERROR_BASE_URL_INVALID
+        }
+        if (scheme == "http" && !isPermittedCleartextHost(host)) {
+            return ERROR_CLEARTEXT_NOT_PERMITTED
+        }
         if (draft.model.isBlank()) return ERROR_MODEL_REQUIRED
         if (enteredKey.isNullOrBlank() && apiKey(id).isNullOrBlank()) return ERROR_API_KEY_REQUIRED
         return null
+    }
+
+    fun isPermittedCleartextHost(host: String): Boolean {
+        val cleanHost = host.lowercase().trim().removePrefix("[").removeSuffix("]")
+        if (cleanHost == "localhost" || cleanHost == "127.0.0.1" || cleanHost == "10.0.2.2" || cleanHost == "::1") {
+            return true
+        }
+        if (cleanHost.startsWith("127.")) {
+            return true
+        }
+        if (cleanHost.endsWith(".local") || cleanHost.endsWith(".lan") ||
+            cleanHost.endsWith(".home") || cleanHost.endsWith(".internal")) {
+            return true
+        }
+        return false
     }
 
     /** Returns the new provider's id. The first provider added becomes active. */
@@ -154,6 +181,7 @@ class ProviderStore(
         // editor can show it directly under the form.
         const val ERROR_NAME_REQUIRED = "Give this provider a name, so you can tell it apart in the list."
         const val ERROR_BASE_URL_INVALID = "The base URL must start with http:// or https://, for example https://api.openai.com/v1."
+        const val ERROR_CLEARTEXT_NOT_PERMITTED = "Cleartext HTTP is only permitted for local or private network endpoints (such as localhost, 10.0.2.2, or .local/.lan/.home/.internal domains). Use HTTPS for remote providers."
         const val ERROR_MODEL_REQUIRED = "Enter a model name. It is sent to the provider exactly as typed."
         const val ERROR_API_KEY_REQUIRED = "Enter the API key for this provider. Leave the field empty only when you are keeping a key you already saved."
 

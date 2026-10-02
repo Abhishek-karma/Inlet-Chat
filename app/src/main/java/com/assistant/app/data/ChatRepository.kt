@@ -738,8 +738,16 @@ class ChatRepository(
     private fun dataUrl(path: String): String? {
         val file = File(path)
         if (!file.exists()) return null
-        val encoded = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
-        return "data:image/jpeg;base64,$encoded"
+        return try {
+            if (file.length() > MAX_PROCESSED_IMAGE_BYTES) return null
+            val bytes = file.readBytes()
+            val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            "data:image/jpeg;base64,$encoded"
+        } catch (_: OutOfMemoryError) {
+            null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun readTextFile(path: String): String =
@@ -787,5 +795,6 @@ class ChatRepository(
         const val SEARCH_NOT_CONFIGURED = SearchController.SEARCH_NOT_CONFIGURED
         const val MAX_IMAGES_PER_MESSAGE = AttachmentManager.MAX_IMAGES_PER_MESSAGE
         const val MAX_TEXTS_PER_MESSAGE = AttachmentManager.MAX_TEXTS_PER_MESSAGE
+        private const val MAX_PROCESSED_IMAGE_BYTES = 5L * 1024 * 1024
     }
 }

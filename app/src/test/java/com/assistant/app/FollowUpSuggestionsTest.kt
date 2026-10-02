@@ -108,6 +108,26 @@ class FollowUpSuggestionsTest {
     }
 
     @Test
+    fun isWorthSuggesting_naturalRefusals() {
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("I can't help with that."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("I’m unable to assist with that request."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("I can't provide instructions for that."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("I cannot assist with that."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("I apologize, but I cannot fulfill this request."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("As an AI, I am unable to assist with this."))
+        assertFalse(FollowUpSuggestions.isWorthSuggesting("My safety guidelines do not allow me to assist with this."))
+    }
+
+    @Test
+    fun isWorthSuggesting_veryShortLegitimateAnswers() {
+        assertTrue(FollowUpSuggestions.isWorthSuggesting("Paris."))
+        assertTrue(FollowUpSuggestions.isWorthSuggesting("42"))
+        assertTrue(FollowUpSuggestions.isWorthSuggesting("Kotlin 2.1"))
+        assertTrue(FollowUpSuggestions.isWorthSuggesting("O(log n)"))
+        assertTrue(FollowUpSuggestions.isWorthSuggesting("Yes, you can."))
+    }
+
+    @Test
     fun isWorthSuggesting_conciseInformativeAnswers() {
         assertTrue(FollowUpSuggestions.isWorthSuggesting("Paris is the capital of France."))
         assertTrue(FollowUpSuggestions.isWorthSuggesting("Water boils at 100°C at standard pressure."))

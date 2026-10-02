@@ -146,24 +146,24 @@ class OpenAICompatibleProviderTest {
             chunks,
         )
     }
-
     @Test
     fun `reasoning key is honored as fallback`() {
         server.enqueue(
             MockResponse().setBody(
                 "data: {\"choices\":[{\"delta\":{\"reasoning\":\"hmm\"}}]}\n\n" +
+                    delta("ans") +
                     "data: [DONE]\n\n",
             ),
         )
 
         assertEquals(
-            listOf(ChatChunk.Reasoning("hmm"), ChatChunk.Done),
+            listOf(ChatChunk.Reasoning("hmm"), ChatChunk.Delta("ans"), ChatChunk.Done),
             collect(provider(), request()),
         )
     }
 
     @Test
-    fun `reasoning-only stream completes as Done`() {
+    fun `reasoning-only stream without answer content fails with InvalidResponse`() {
         server.enqueue(
             MockResponse().setBody(
                 "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"thought hard\"}}]}\n\n" +
@@ -172,7 +172,7 @@ class OpenAICompatibleProviderTest {
         )
 
         assertEquals(
-            listOf(ChatChunk.Reasoning("thought hard"), ChatChunk.Done),
+            listOf(ChatChunk.Reasoning("thought hard"), ChatChunk.Failure(ProviderError.InvalidResponse)),
             collect(provider(), request()),
         )
     }

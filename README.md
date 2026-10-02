@@ -1,123 +1,82 @@
-# Inlet Chat
+# L0
 
 [![CI](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/ci.yml)
 [![Release](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml/badge.svg)](https://github.com/Abhishek-karma/Inlet-Chat/actions/workflows/release.yml)
 
-A minimal Android AI chat application focused on reliable, private conversation with OpenAI-compatible providers.
+A minimal, private Android AI chat client focused on fast token-level streaming with OpenAI-compatible and Google Gemini providers.
 
 ## Overview
 
-Inlet Chat is a bring-your-own-key (BYOK) chat client for Android. It provides token-level streaming, conversation history, voice input and output, attachments, and optional web-grounded answers — with API keys stored only on the device.
+L0 is a bring-your-own-key (BYOK) AI chat client for Android. It supports direct token-level streaming, local SQLite conversation history, voice input and output, multimodal image and text attachments, and optional keyless web search — with API keys stored securely on-device.
 
-Inlet Chat is a chat application, not an agent platform: it has no autonomous agent loop, no background execution, and no local model inference.
+L0 communicates directly from the Android device to the configured AI provider endpoint with no proxy or intermediary servers.
 
 ## Features
 
-**Conversation**
+- **Streaming conversation**: Low-latency token streaming with stop, retry, regenerate, and edit-and-resend capabilities.
+- **Answer versions**: Regenerating an answer preserves previous variations, switchable on the message card.
+- **Follow-up suggestions**: Contextual follow-up suggestions generated automatically after answers (with natural-language refusal and error detection). Tapping a suggestion stages it in the composer for review without auto-sending.
+- **AI providers**:
+  - Saved provider profiles with quick-switching in the top bar.
+  - Built-in presets for Google Gemini, OpenAI, OpenRouter, Groq, and Naga.
+  - Custom OpenAI-compatible endpoints with models listing (`/models`) and connection testing.
+  - Local/self-hosted LLM support (such as Ollama, LM Studio, or local servers reachable via `localhost`, `10.0.2.2`, or `.local`, `.lan`, `.home`, `.internal` private domains).
+  - Collapsible model reasoning visualization for reasoning/thinking models.
+- **Web search grounding**: Optional DuckDuckGo web search integration toggled per conversation, with cited web sources displayed alongside answers.
+- **Multimodal attachments**:
+  - Image attachments (camera capture or gallery pick): automatic downscaling (max dimension 1280px) and JPEG compression.
+  - Text-like document attachments (Markdown, JSON, code files up to 100 KB) inlined as context.
+- **Voice integration**: Speech recognition input and text-to-speech (TTS) voice playback with per-message controls and playback speed adjustment.
+- **Conversation management**: Search across messages, pin conversations, rename, delete, and export transcripts to plain text.
+- **Appearance**: Follows Material Design 3 guidelines with light, dark, and system themes, custom font scaling, and dynamic splash icon.
 
-- Token-level streaming responses with stop control
-- Retry, regenerate, and edit-and-resend
-- Answer versions — regenerating keeps previous answers, switchable on the message
-- Follow-up suggestion chips after each answer (fail silently)
-- Conversation history with pin, rename, delete, and plain-text sharing
-- Markdown rendering: headings, lists, tables, code blocks, links, and emphasis, plus offline LaTeX and Mermaid diagrams
+## Security & Network Model
 
-**Providers**
-
-- Multiple saved OpenAI-compatible providers with a top-bar switcher
-- Configurable name, base URL, API key, and model, with a connection test
-- Collapsible model reasoning when the provider streams `reasoning_content`, with a settings toggle
-- Optional web search grounding, no API key or account required — toggled per conversation, with sources listed under the answer
-
-**Attachments and voice**
-
-- Image and text-file attachments — images are downscaled and sent as data-URL parts, text files are inlined as context
-- Voice input via `SpeechRecognizer` and voice output via TTS, with playback speed, auto-play, and per-message playback controls
-
-**Appearance**
-
-- System, light, and dark themes with a text-size setting
-- Time-of-day greeting on the home screen
-
-## Architecture
-
-Single-module application built with Kotlin, Jetpack Compose (Material 3), Room, DataStore, OkHttp, and coroutines.
-
-```text
-Compose UI
-    ↓
-ViewModel
-    ↓
-Chat Logic
-    ↓
-LLM Provider
-    ↓
-OpenAI-compatible API
-```
+- **API key storage**: Stored exclusively on-device in `EncryptedSharedPreferences` backed by the Android KeyStore (`AES-256-GCM`), with `android:allowBackup="false"`. Keys are never logged and never included in backups.
+- **Network security**: Enforces TLS/HTTPS by default for all remote endpoints. Cleartext HTTP is strictly constrained to loopback and private local network ranges (`localhost`, `127.0.0.1`, `10.0.2.2`, `*.local`, `*.lan`, `*.home`, `*.internal`) for self-hosted development and offline inference. Remote endpoints require HTTPS.
+- **Direct communication**: Requests go straight to the configured provider endpoint with no third-party tracking or telemetry.
 
 ## Requirements
 
-- JDK 17 or newer (JDK 21 supported)
-- Android SDK with compileSdk 35
+- Android 8.0+ (API level 26 minimum, API level 35 target)
+- JDK 17 or JDK 21
+- Gradle 8.13+ / Android Gradle Plugin 8.9+
 
-## Build and Test
+## Building and Testing
 
+Build debug APK:
 ```bash
-./gradlew :app:assembleDebug        # debug build
-./gradlew :app:testDebugUnitTest    # unit tests
-./gradlew :app:lintDebug            # lint
-./gradlew :app:assembleRelease      # minified release build
+./gradlew :app:assembleDebug
+```
+Output: `app/build/outputs/apk/debug/L0-debug.apk`
+
+Run local JVM unit and Robolectric tests:
+```bash
+./gradlew :app:testDebugUnitTest
+./gradlew :app:testReleaseUnitTest
 ```
 
-The release build applies R8 minification and resource shrinking and is produced unsigned. Add a signing configuration before installing or distributing it.
+Run Android Lint:
+```bash
+./gradlew :app:lintDebug
+```
 
-## Configuration
+Build minified release APK:
+```bash
+./gradlew :app:assembleRelease
+```
 
-| Setting | Value |
-| --- | --- |
-| Application ID | `com.aistudio.inletchat.wzptbq` |
-| Namespace | `com.assistant.app` |
-| minSdk / targetSdk | 26 / 35 |
-| Version | 1.0.0 (versionCode 1) |
-| JVM target | 11 |
+## Release Configuration
 
-## Security and Privacy
+GitHub Actions workflows:
+- **CI** (`.github/workflows/ci.yml`): Runs lint, unit tests, and builds `L0-debug.apk` on pushes and pull requests to `main`.
+- **Release** (`.github/workflows/release.yml`): Triggered by pushing a version tag (e.g. `v1.2.0`) or manual dispatch. Runs release unit tests, lint, signs the release APK, verifies signature with `apksigner`, computes SHA-256 checksums, and attaches `L0-<version>.apk` to the GitHub release.
 
-- API keys are configured in the app's settings and stored locally in `EncryptedSharedPreferences` (`androidx.security.crypto`, backed by Android KeyStore AES-256-GCM, with `allowBackup=false`).
-- Keys are never logged, never written to plain DataStore or Room, and never committed to version control.
-- Keys are sent only to the configured provider endpoint over TLS/HTTPS.
-- The app contains no hardcoded provider keys, no analytics, and no third-party services.
-
-## Testing
-
-The automated suite (unit and UI tests, lint) covers chat, streaming, stop/retry, version switching, follow-up suggestions, history pin/rename, provider configuration, appearance, error mapping, persistence, and voice state.
-
-The following behaviors additionally require verification on a real device:
-
-<details>
-<summary>Manual device checklist</summary>
-
-- [ ] First launch
-- [ ] Provider setup
-- [ ] Normal and long responses
-- [ ] Stop response
-- [ ] Network disabled during generation
-- [ ] Invalid API key
-- [ ] Invalid endpoint
-- [ ] App backgrounded during generation
-- [ ] App restored after process death
-- [ ] Conversation reopening
-- [ ] Voice input
-- [ ] Voice output
-- [ ] Light and dark themes
-- [ ] Keyboard behavior
-
-</details>
-
-## Release
-
-A release is cut only after the full release checklist passes, including real-device smoke testing.
-
-Pushing a tag matching `v*` (for example `v1.0.0`) triggers the release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml). The workflow runs the release unit tests and lint, builds the minified release APK, verifies its signature, and publishes a GitHub release with the APK and its SHA-256 checksum attached.
-
-Releases are signed. The workflow reads four repository secrets — `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` — and writes them to a temporary `keystore.properties` that the build reads; the file is cleaned up afterwards and is gitignored. Locally, creating a `keystore.properties` at the repository root with `storeFile`, `storePassword`, `keyAlias`, and `keyPassword` signs local release builds the same way; without it, release builds stay unsigned.
+For local signed release builds, configure `keystore.properties` at the repository root with:
+```properties
+storeFile=/path/to/release.keystore
+storePassword=your-store-password
+keyAlias=your-key-alias
+keyPassword=your-key-password
+```
+If `keystore.properties` is absent, release builds remain unsigned.

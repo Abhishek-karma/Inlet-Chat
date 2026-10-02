@@ -109,15 +109,15 @@ class OpenAICompatibleProvider(
         settle: (ChatChunk) -> Unit,
     ) {
         val parser = SseParser()
-        var contentSeen = false
+        var answerSeen = false
 
         /** Handles one event; false when reading must stop. */
         fun handle(event: SseEvent): Boolean {
             when {
                 event.data == DONE_MARKER -> {
-                    // An empty response is a failure; reasoning counts as output.
+                    // Must contain actual answer content to be considered successful.
                     settle(
-                        if (contentSeen) ChatChunk.Done
+                        if (answerSeen) ChatChunk.Done
                         else ChatChunk.Failure(ProviderError.InvalidResponse),
                     )
                     return false
@@ -137,7 +137,9 @@ class OpenAICompatibleProvider(
                     for (chunk in chunks) {
                         if (chunk is ChatChunk.Delta || chunk is ChatChunk.Reasoning) {
                             if (!sendDelta(chunk)) return false
-                            contentSeen = true
+                            if (chunk is ChatChunk.Delta && chunk.text.isNotEmpty()) {
+                                answerSeen = true
+                            }
                         }
                     }
                 }
@@ -166,7 +168,7 @@ class OpenAICompatibleProvider(
             if (!handle(event)) return
         }
         settle(
-            if (contentSeen) ChatChunk.Done
+            if (answerSeen) ChatChunk.Done
             else ChatChunk.Failure(ProviderError.InvalidResponse),
         )
     }

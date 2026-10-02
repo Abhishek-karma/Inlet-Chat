@@ -138,7 +138,7 @@ jobs:
 
           OUTPUT_DIR="$RUNNER_TEMP/dist"
           mkdir -p "$OUTPUT_DIR"
-          FINAL_APK_NAME="InletChat-${VERSION}.apk"
+          FINAL_APK_NAME="L0-${VERSION}.apk"
           FINAL_APK_PATH="$OUTPUT_DIR/$FINAL_APK_NAME"
           CHECKSUM_PATH="$OUTPUT_DIR/${FINAL_APK_NAME}.sha256"
 
@@ -155,7 +155,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-apk-and-checksum
+          name: l0-release-apk-and-checksum
           path: |
             ${{ steps.verify_apk.outputs.apk_path }}
             ${{ steps.verify_apk.outputs.checksum_path }}

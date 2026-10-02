@@ -99,7 +99,7 @@ class GeminiProvider(
         sendDelta: (ChatChunk) -> Boolean,
         settle: (ChatChunk) -> Unit,
     ) {
-        var contentSeen = false
+        var answerSeen = false
 
         while (true) {
             when (val line = readLine(source)) {
@@ -126,7 +126,9 @@ class GeminiProvider(
                                     }
                                     is ChatChunk.Delta, is ChatChunk.Reasoning -> {
                                         if (!sendDelta(chunk)) return
-                                        contentSeen = true
+                                        if (chunk is ChatChunk.Delta && chunk.text.isNotEmpty()) {
+                                            answerSeen = true
+                                        }
                                     }
                                     is ChatChunk.Done -> {
                                         // Final stop marker received
@@ -140,7 +142,7 @@ class GeminiProvider(
         }
 
         settle(
-            if (contentSeen) ChatChunk.Done
+            if (answerSeen) ChatChunk.Done
             else ChatChunk.Failure(ProviderError.InvalidResponse),
         )
     }

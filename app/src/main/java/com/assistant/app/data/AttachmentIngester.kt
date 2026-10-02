@@ -9,6 +9,7 @@ import com.assistant.app.llm.model.UiAttachment
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 import kotlinx.coroutines.CoroutineDispatcher
@@ -109,11 +110,14 @@ class AttachmentIngester(
             },
         ) ?: return IngestResult.Failure(UNREADABLE_MESSAGE)
         val scaled = scaleDown(decoded, MAX_DIMENSION)
-        val encoded = ByteArrayOutputStream().also { buffer ->
-            scaled.compress(Bitmap.CompressFormat.JPEG, IMAGE_QUALITY, buffer)
+        if (scaled !== decoded) {
+            decoded.recycle()
         }
         val file = newFile("jpg")
-        file.writeBytes(encoded.toByteArray())
+        FileOutputStream(file).use { out ->
+            scaled.compress(Bitmap.CompressFormat.JPEG, IMAGE_QUALITY, out)
+        }
+        scaled.recycle()
         return IngestResult.Success(
             UiAttachment(
                 id = UUID.randomUUID().toString(),

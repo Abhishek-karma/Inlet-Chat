@@ -33,39 +33,87 @@ object FollowUpSuggestions {
         "i'm ready when you are.",
     )
 
+    private fun normalizeText(text: String): String =
+        text.replace('’', '\'')
+            .replace('‘', '\'')
+            .replace('`', '\'')
+            .trim()
+
+    private val KNOWN_ERROR_PREFIXES = listOf(
+        "error:",
+        "something went wrong",
+        "request timed out",
+        "network unavailable",
+        "quota exceeded",
+        "rate limited",
+        "invalid api key",
+        "authentication failed",
+        "failed to connect",
+        "connection failed",
+        "provider returned",
+    )
+
+    private val KNOWN_REFUSAL_PREFIXES = listOf(
+        "i can't help with that",
+        "i cannot help with that",
+        "i'm unable to assist",
+        "i am unable to assist",
+        "i can't provide instructions",
+        "i cannot provide instructions",
+        "i can't assist with that",
+        "i cannot assist with that",
+        "i am unable to help",
+        "i'm unable to help",
+        "i cannot fulfill this request",
+        "i'm not able to fulfill this request",
+        "i am not able to fulfill this request",
+        "as an ai",
+        "i apologize, but i cannot",
+        "i apologize, but i am unable",
+        "sorry, but i can't",
+        "sorry, but i cannot",
+        "sorry, i can't",
+        "sorry, i cannot",
+    )
+
+    private val KNOWN_REFUSAL_CONTAINS = listOf(
+        "safety guidelines do not allow",
+        "safety guidelines do not permit",
+        "content policy prevents",
+        "against my safety guidelines",
+    )
+
+
+
     /**
      * Determines whether an answer is substantive enough to suggest follow-up questions.
-     * - Disqualifies empty or blank answers
+     * - Disqualifies empty or blank answers (or those with no letters/digits)
      * - Disqualifies trivial conversational acknowledgements
-     * - Disqualifies error/failure messages
-     * - Allows concise, useful factual/informative answers
-     * - Reliably allows normal length answers without an arbitrary cliff
+     * - Disqualifies error/failure messages and natural-language refusals
+     * - Allows concise, legitimate factual/informative answers without an arbitrary length cliff
      */
     fun isWorthSuggesting(answer: String): Boolean {
         val trimmed = answer.trim()
-        if (trimmed.isEmpty() || trimmed.length < 12) return false
+        if (trimmed.isEmpty() || trimmed.none { it.isLetterOrDigit() }) return false
         if (isErrorOrRefusal(trimmed)) return false
         if (isAcknowledgement(trimmed)) return false
         return true
     }
 
     internal fun isAcknowledgement(text: String): Boolean {
-        val clean = text.trim()
+        val clean = normalizeText(text)
         if (ACKNOWLEDGEMENT_REGEX.matches(clean)) return true
         if (clean.length <= 40 && clean.lowercase() in KNOWN_SHORT_ACKNOWLEDGEMENTS) return true
         return false
     }
 
     internal fun isErrorOrRefusal(text: String): Boolean {
-        val lower = text.lowercase()
-        return lower.startsWith("error:") ||
-            lower.startsWith("something went wrong") ||
-            lower.startsWith("request timed out") ||
-            lower.startsWith("network unavailable") ||
-            lower.startsWith("quota exceeded") ||
-            lower.startsWith("rate limited") ||
-            lower.startsWith("invalid api key") ||
-            lower.startsWith("authentication failed")
+        val normalized = normalizeText(text)
+        val lower = normalized.lowercase()
+        if (KNOWN_ERROR_PREFIXES.any { lower.startsWith(it) }) return true
+        if (KNOWN_REFUSAL_PREFIXES.any { lower.startsWith(it) }) return true
+        if (KNOWN_REFUSAL_CONTAINS.any { lower.contains(it) }) return true
+        return false
     }
 
     suspend fun generate(

@@ -136,6 +136,31 @@ class ProviderStoreTest {
     }
 
     @Test
+    fun validateEnforcesCleartextEndpointRestrictions() = runTest {
+        // Public remote HTTP is rejected to prevent cleartext exposure
+        assertEquals(
+            ProviderStore.ERROR_CLEARTEXT_NOT_PERMITTED,
+            store.validate(0, validDraft.copy(baseUrl = "http://api.openai.com/v1"), "sk"),
+        )
+        assertEquals(
+            ProviderStore.ERROR_CLEARTEXT_NOT_PERMITTED,
+            store.validate(0, validDraft.copy(baseUrl = "http://evil.com/v1"), "sk"),
+        )
+
+        // Local and private network domains are allowed for self-hosted LLMs
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://localhost:11434/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://127.0.0.1:11434/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://10.0.2.2:11434/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://my-pc.local:11434/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://ollama.lan:11434/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://desktop.home:8080/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://cluster.internal:8000/v1"), "sk"))
+
+        // Standard HTTPS is allowed everywhere
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "https://api.openai.com/v1"), "sk"))
+    }
+
+    @Test
     fun seedingMigratesLegacyConfigurationOnce() = runTest {
         keyStore.setLegacyApiKey("sk-legacy")
         preferences.installLegacyProviderConfig("Legacy", "https://legacy.example.com/v1", "legacy-model")

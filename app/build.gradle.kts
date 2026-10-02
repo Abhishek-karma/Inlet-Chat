@@ -14,6 +14,10 @@ import java.util.zip.ZipFile
 val keystoreProperties = Properties()
 rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { keystoreProperties.load(it) }
 
+base {
+    archivesName.set("L0")
+}
+
 android {
     namespace = "com.assistant.app"
     compileSdk = 35
