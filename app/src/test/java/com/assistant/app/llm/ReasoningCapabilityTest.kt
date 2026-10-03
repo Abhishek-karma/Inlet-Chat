@@ -1,84 +1,64 @@
 package com.assistant.app.llm
 
+import com.assistant.app.data.toThinkCapability
+import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.ThinkCapability
+import com.assistant.app.llm.model.accepts
 import com.assistant.app.llm.model.budgetPresets
 import com.assistant.app.llm.model.decodeReasoningConfig
 import com.assistant.app.llm.model.encode
+import com.assistant.app.llm.model.isReasoningSupported
 import com.assistant.app.llm.model.normalize
-import com.assistant.app.llm.model.thinkCapabilityFor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Capability derivation from model ids, config normalization, budget presets,
- * and the persistence encoding. Pure JVM: no Android types involved.
+ * Capability model and provider declaration mapping. Capability is a property
+ * of the configured provider profile — there is deliberately no model-name
+ * matching anywhere in this system.
  */
 class ReasoningCapabilityTest {
 
     @Test
-    fun `gemini 2_5 pro supports a bounded budget without off`() {
-        val capability = thinkCapabilityFor(isGeminiProvider = true, model = "gemini-2.5-pro")
-        assertEquals(ThinkCapability.Budget(128, 32768, allowOff = false, allowAuto = true), capability)
+    fun `unspecified declaration maps to unknown capability`() {
+        val capability = ReasoningSupport.UNSPECIFIED.toThinkCapability()
+        assertEquals(ThinkCapability.Unknown, capability)
+        assertFalse(capability.isReasoningSupported())
     }
 
     @Test
-    fun `gemini 2_5 flash supports off, auto, and a bounded budget`() {
-        val capability = thinkCapabilityFor(isGeminiProvider = true, model = "gemini-2.5-flash")
-        assertEquals(ThinkCapability.Budget(1, 24576, allowOff = true, allowAuto = true), capability)
-    }
-
-    @Test
-    fun `gemini 2_5 flash-lite has no auto`() {
-        val capability = thinkCapabilityFor(isGeminiProvider = true, model = "gemini-2.5-flash-lite")
-        assertEquals(ThinkCapability.Budget(512, 24576, allowOff = true, allowAuto = false), capability)
-    }
-
-    @Test
-    fun `gemini 3 models are effort based`() {
-        val capability = thinkCapabilityFor(isGeminiProvider = true, model = "gemini-3-pro-preview")
-        assertEquals(ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH)), capability)
-    }
-
-    @Test
-    fun `older gemini models are unsupported`() {
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(true, "gemini-1.5-pro"))
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(true, "gemini-2.0-flash"))
-    }
-
-    @Test
-    fun `openai o-series models support effort`() {
+    fun `effort declaration maps to low medium high`() {
+        val capability = ReasoningSupport.EFFORT.toThinkCapability()
         assertEquals(
             ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
-            thinkCapabilityFor(false, "o3-mini"),
+            capability,
         )
-        assertEquals(
-            ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
-            thinkCapabilityFor(false, "o4-mini-2025-04-16"),
-        )
-        assertEquals(
-            ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
-            thinkCapabilityFor(false, "openai/o3-mini"),
-        )
+        assertTrue(capability.isReasoningSupported())
     }
 
     @Test
-    fun `gpt-5 models support effort`() {
+    fun `budget declaration maps to a bounded budget`() {
+        val capability = ReasoningSupport.BUDGET.toThinkCapability()
         assertEquals(
-            ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
-            thinkCapabilityFor(false, "gpt-5-mini"),
+            ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
+            capability,
         )
+        assertTrue(capability.isReasoningSupported())
     }
 
     @Test
-    fun `unknown models are unsupported for both provider kinds`() {
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(false, "gpt-4o-mini"))
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(false, "llama3.1:8b"))
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(true, "text-embedding-004"))
-        assertEquals(ThinkCapability.Unsupported, thinkCapabilityFor(false, ""))
+    fun `unknown and unsupported accept nothing and normalize to auto`() {
+        listOf(ThinkCapability.Unknown, ThinkCapability.Unsupported).forEach { capability ->
+            assertFalse(capability.isReasoningSupported())
+            assertFalse(capability.accepts(ReasoningConfig.Budget(1024)))
+            assertFalse(capability.accepts(ReasoningConfig.Effort(ReasoningEffort.HIGH)))
+            assertEquals(ReasoningConfig.Auto, capability.normalize(ReasoningConfig.Budget(1024)))
+        }
     }
 
     @Test
@@ -95,14 +75,6 @@ class ReasoningCapabilityTest {
         assertEquals(ReasoningConfig.Auto, effort.normalize(ReasoningConfig.Effort(ReasoningEffort.MEDIUM)))
         assertEquals(ReasoningConfig.Auto, effort.normalize(ReasoningConfig.Off))
         assertEquals(ReasoningConfig.Auto, effort.normalize(ReasoningConfig.Budget(1024)))
-    }
-
-    @Test
-    fun `normalize on unsupported always falls back to auto`() {
-        assertEquals(
-            ReasoningConfig.Auto,
-            ThinkCapability.Unsupported.normalize(ReasoningConfig.Budget(1024)),
-        )
     }
 
     @Test

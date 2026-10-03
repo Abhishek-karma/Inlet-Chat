@@ -5,9 +5,10 @@ import com.assistant.app.data.ChatRepository
 import com.assistant.app.data.ChatStatus
 import com.assistant.app.llm.FakeLlmProvider
 import com.assistant.app.llm.ScriptedEvent
+import com.assistant.app.llm.model.ProviderError
 import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.ReasoningEffort
-import com.assistant.app.llm.model.thinkCapabilityFor
+import com.assistant.app.llm.model.ThinkCapability
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,10 +32,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Model-aware Think control behavior in [ChatRepository]: capability-driven
- * selection, capture of the reasoning config when a generation starts, no
- * mutation of an active request, unsupported-model safety, and persistence
- * round-trips.
+ * Capability-driven Think behavior in [ChatRepository]. Capabilities are
+ * passed in as explicit values (never derived from model names), so an
+ * arbitrary model id with an unknown/unsupported capability never produces a
+ * reasoning parameter.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -58,7 +59,7 @@ class ThinkControlTest {
     }
 
     private fun thinkRunTest(
-        model: String,
+        capability: ThinkCapability,
         script: List<ScriptedEvent>,
         block: suspend TestScope.(ChatRepository, FakeLlmProvider, MutableStateFlow<ChatLlmState>) -> Unit,
     ): TestResult = runTest {
@@ -68,11 +69,14 @@ class ThinkControlTest {
         val chatLlm = MutableStateFlow<ChatLlmState>(
             ChatLlmState.Ready(
                 provider = provider,
-                model = model,
-                thinkCapability = thinkCapabilityFor(model.startsWith("gemini"), model),
+                model = "my-custom-reasoning-model",
+                thinkCapability = capability,
             ),
         )
         val repository = SelectionStore().repository(chatLlm, mainDispatcher)
+        // The ViewModel applies the active capability to repository state the
+        // same way when the provider changes; mirror that here.
+        repository.onThinkModelChanged("my-custom-reasoning-model", capability)
         block(repository, provider, chatLlm)
     }
 
@@ -82,25 +86,12 @@ class ThinkControlTest {
     )
 
     @Test
-    fun `generation carries the selected reasoning config`() = thinkRunTest(
-        model = "o3-mini",
+    fun `unknown capability sends no reasoning config even with a selection`() = thinkRunTest(
+        capability = ThinkCapability.Unknown,
         script = helloScript,
-    ) { repository, provider, chatLlm ->
-        repository.onThinkModelChanged("o3-mini", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+    ) { repository, provider, _ ->
         repository.setThinkConfig(ReasoningConfig.Effort(ReasoningEffort.HIGH))
-
-        launch { repository.send("Hi") }
-        advanceUntilIdle()
-
-        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), provider.requests.single().reasoning)
-    }
-
-    @Test
-    fun `auto selection sends no reasoning config`() = thinkRunTest(
-        model = "o3-mini",
-        script = helloScript,
-    ) { repository, provider, chatLlm ->
-        repository.onThinkModelChanged("o3-mini", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+        assertEquals(ReasoningConfig.Auto, repository.uiState.value.thinkConfig)
 
         launch { repository.send("Hi") }
         advanceUntilIdle()
@@ -109,11 +100,10 @@ class ThinkControlTest {
     }
 
     @Test
-    fun `unsupported model ignores selection and sends no reasoning config`() = thinkRunTest(
-        model = "llama3.1:8b",
+    fun `unsupported capability sends no reasoning config`() = thinkRunTest(
+        capability = ThinkCapability.Unsupported,
         script = helloScript,
-    ) { repository, provider, chatLlm ->
-        repository.onThinkModelChanged("llama3.1:8b", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+    ) { repository, provider, _ ->
         repository.setThinkConfig(ReasoningConfig.Budget(4096))
         assertEquals(ReasoningConfig.Auto, repository.uiState.value.thinkConfig)
 
@@ -124,15 +114,46 @@ class ThinkControlTest {
     }
 
     @Test
+    fun `effort capability carries the selected effort`() = thinkRunTest(
+        capability = ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
+        script = helloScript,
+    ) { repository, provider, _ ->
+        repository.setThinkConfig(ReasoningConfig.Effort(ReasoningEffort.HIGH))
+        launch { repository.send("Hi") }
+        advanceUntilIdle()
+        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), provider.requests.single().reasoning)
+    }
+
+    @Test
+    fun `auto selection sends no reasoning config`() = thinkRunTest(
+        capability = ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
+        script = helloScript,
+    ) { repository, provider, _ ->
+        launch { repository.send("Hi") }
+        advanceUntilIdle()
+        assertNull(provider.requests.single().reasoning)
+    }
+
+    @Test
+    fun `budget capability carries the selected budget`() = thinkRunTest(
+        capability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
+        script = helloScript,
+    ) { repository, provider, _ ->
+        repository.setThinkConfig(ReasoningConfig.Budget(4096))
+        launch { repository.send("Hi") }
+        advanceUntilIdle()
+        assertEquals(ReasoningConfig.Budget(4096), provider.requests.single().reasoning)
+    }
+
+    @Test
     fun `changing the selection while streaming does not mutate the active request`() = thinkRunTest(
-        model = "gemini-2.5-flash",
+        capability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
         script = listOf(
             ScriptedEvent.Delay(500),
             ScriptedEvent.Emit("Hello"),
             ScriptedEvent.Delay(500),
         ),
-    ) { repository, provider, chatLlm ->
-        repository.onThinkModelChanged("gemini-2.5-flash", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+    ) { repository, provider, _ ->
         repository.setThinkConfig(ReasoningConfig.Budget(4096))
 
         launch { repository.send("Hi") }
@@ -150,10 +171,9 @@ class ThinkControlTest {
 
     @Test
     fun `retry uses the selection current at retry time`() = thinkRunTest(
-        model = "o3-mini",
-        script = listOf(ScriptedEvent.Fail(com.assistant.app.llm.model.ProviderError.ServerError)),
-    ) { repository, provider, chatLlm ->
-        repository.onThinkModelChanged("o3-mini", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+        capability = ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
+        script = listOf(ScriptedEvent.Fail(ProviderError.ServerError)),
+    ) { repository, provider, _ ->
         repository.setThinkConfig(ReasoningConfig.Effort(ReasoningEffort.LOW))
         launch { repository.send("Hi") }
         advanceUntilIdle()
@@ -163,37 +183,29 @@ class ThinkControlTest {
         advanceUntilIdle()
 
         assertEquals(2, provider.requests.size)
-        assertEquals(
-            ReasoningConfig.Effort(ReasoningEffort.HIGH),
-            provider.requests[1].reasoning,
-        )
+        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), provider.requests[1].reasoning)
     }
 
     @Test
-    fun `selection persists per model and is restored clamped to the model capability`() = runTest {
+    fun `persisted selection is validated against the model capability`() = runTest {
         val chatLlm = MutableStateFlow<ChatLlmState>(
             ChatLlmState.Ready(
                 provider = FakeLlmProvider(helloScript),
                 model = "gemini-2.5-pro",
-                thinkCapability = thinkCapabilityFor(true, "gemini-2.5-pro"),
+                thinkCapability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
             ),
         )
+        val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
         val store = SelectionStore()
-        val repository = store.repository(chatLlm, UnconfinedTestDispatcher(testScheduler))
-        repository.onThinkModelChanged("gemini-2.5-pro", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+        val repository = store.repository(chatLlm, mainDispatcher)
+        repository.onThinkModelChanged("gemini-2.5-pro", ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true))
         repository.setThinkConfig(ReasoningConfig.Budget(8192))
-
         assertEquals(ReasoningConfig.Budget(8192), store.saved["gemini-2.5-pro"])
 
-        // A fresh repository (process-death path) restores the saved value.
-        val reloaded = store.repository(chatLlm, UnconfinedTestDispatcher(testScheduler))
-        reloaded.onThinkModelChanged("gemini-2.5-pro", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
-        assertEquals(ReasoningConfig.Budget(8192), reloaded.uiState.value.thinkConfig)
-
-        // A stored effort selection is dropped on a budget-only model.
+        // A stored effort selection is dropped on a budget-only capability.
         store.saved["gemini-2.5-pro"] = ReasoningConfig.Effort(ReasoningEffort.HIGH)
-        val clamped = store.repository(chatLlm, UnconfinedTestDispatcher(testScheduler))
-        clamped.onThinkModelChanged("gemini-2.5-pro", (chatLlm.value as ChatLlmState.Ready).thinkCapability)
+        val clamped = store.repository(chatLlm, mainDispatcher)
+        clamped.onThinkModelChanged("gemini-2.5-pro", ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true))
         assertEquals(ReasoningConfig.Auto, clamped.uiState.value.thinkConfig)
     }
 }

@@ -72,7 +72,18 @@ data class ProviderEntity(
     val baseUrl: String,
     val model: String,
     val isActive: Boolean = false,
+    val reasoningSupport: ReasoningSupport = ReasoningSupport.UNSPECIFIED,
 )
+
+/**
+ * The provider-level reasoning control the user has declared for a profile.
+ * [UNSPECIFIED] (the default) means unknown → no reasoning parameter is sent.
+ */
+enum class ReasoningSupport {
+    UNSPECIFIED,
+    EFFORT,
+    BUDGET;
+}
 
 @Dao
 interface ProviderDao {
@@ -89,8 +100,11 @@ interface ProviderDao {
     @Insert
     suspend fun insert(provider: ProviderEntity): Long
 
-    @Query("UPDATE providers SET name = :name, baseUrl = :baseUrl, model = :model WHERE id = :id")
-    suspend fun update(id: Long, name: String, baseUrl: String, model: String)
+    @Query(
+        "UPDATE providers SET name = :name, baseUrl = :baseUrl, model = :model, " +
+            "reasoningSupport = :reasoningSupport WHERE id = :id",
+    )
+    suspend fun update(id: Long, name: String, baseUrl: String, model: String, reasoningSupport: ReasoningSupport)
 
     @Query("DELETE FROM providers WHERE id = :id")
     suspend fun delete(id: Long)
@@ -269,7 +283,7 @@ interface AttachmentDao {
         ProviderEntity::class,
         AttachmentEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -347,6 +361,16 @@ abstract class ChatDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN searchEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v8: explicit per-provider reasoning support. Existing rows default to
+         * UNSPECIFIED (unknown), which keeps every current provider safe.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE providers ADD COLUMN reasoningSupport TEXT NOT NULL DEFAULT 'UNSPECIFIED'")
             }
         }
     }

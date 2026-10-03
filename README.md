@@ -22,7 +22,7 @@ L0 communicates directly from the Android device to the configured AI provider e
   - Custom OpenAI-compatible endpoints with models listing (`/models`) and connection testing.
   - Local/self-hosted LLM support (such as Ollama, LM Studio, or local servers reachable via `localhost`, `10.0.2.2`, or `.local`, `.lan`, `.home`, `.internal` private domains).
   - Collapsible model reasoning visualization for reasoning/thinking models.
-  - Think control in the composer to pick a reasoning level or thinking budget per model; it is only shown for models/providers that expose configurable reasoning settings.
+  - Think control in the composer for reasoning settings. Capability is declared per provider profile in settings (levels or a thinking budget); profiles left undeclared never receive reasoning parameters.
 - **Web search grounding**: Optional DuckDuckGo web search integration toggled per conversation, with cited web sources displayed alongside answers.
 - **Multimodal attachments**:
   - Image attachments (camera capture or gallery pick): automatic downscaling (max dimension 1280px) and JPEG compression.

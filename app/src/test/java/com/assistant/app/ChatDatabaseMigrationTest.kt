@@ -9,6 +9,7 @@ import com.assistant.app.data.local.AttachmentEntity
 import com.assistant.app.data.local.ChatDatabase
 import com.assistant.app.data.local.MessageVersionEntity
 import com.assistant.app.data.local.ProviderEntity
+import com.assistant.app.data.local.ReasoningSupport
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -49,7 +50,7 @@ class ChatDatabaseMigrationTest {
     }
 
     @Test
-    fun upgradeFromV1ToV7_preservesExistingDataAndEnablesAllNewFields() = runTest {
+    fun upgradeFromV1ToV8_preservesExistingDataAndEnablesAllNewFields() = runTest {
         // Step 1: Create a real SQLite database with v1 schema and data
         val factory = FrameworkSQLiteOpenHelperFactory()
         val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
@@ -85,7 +86,7 @@ class ChatDatabaseMigrationTest {
         v1Db.execSQL("INSERT INTO messages (id, conversationId, role, content, createdAt) VALUES ('m2', 'c1', 'ASSISTANT', 'L0 is an AI chat app.', 1001)")
         v1Db.close()
 
-        // Step 2: Open with Room applying the entire sequential migration chain 1->2->3->4->5->6->7
+        // Step 2: Open with Room applying the entire sequential migration chain 1->2->3->4->5->6->7->8
         val roomDb = Room.databaseBuilder(context, ChatDatabase::class.java, dbName)
             .addMigrations(
                 ChatDatabase.MIGRATION_1_2,
@@ -94,6 +95,7 @@ class ChatDatabaseMigrationTest {
                 ChatDatabase.MIGRATION_4_5,
                 ChatDatabase.MIGRATION_5_6,
                 ChatDatabase.MIGRATION_6_7,
+                ChatDatabase.MIGRATION_7_8,
             )
             .build()
         database = roomDb
@@ -173,7 +175,7 @@ class ChatDatabaseMigrationTest {
     }
 
     @Test
-    fun upgradeFromV6ToV7_preservesExistingDataAndAddsSearchEnabledField() = runTest {
+    fun upgradeFromV6ToV8_preservesExistingDataAndAddsSearchEnabledAndReasoningSupport() = runTest {
         // Build v6 database
         val factory = FrameworkSQLiteOpenHelperFactory()
         val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
@@ -236,11 +238,15 @@ class ChatDatabaseMigrationTest {
             "INSERT INTO messages (id, conversationId, role, content, createdAt, selectedVersion, followUps, reasoning, sources) " +
                 "VALUES ('m6_2', 'c6', 'ASSISTANT', 'V6 Answer', 2001, 0, 'Follow 1', 'Thought process', '[{\"title\":\"Src\",\"url\":\"http://src.com\"}]')",
         )
+        v6Db.execSQL(
+            "INSERT INTO providers (name, baseUrl, model, isActive) VALUES " +
+                "('Gemini', 'https://generativelanguage.googleapis.com', 'gemini-2.5-flash', 1)",
+        )
         v6Db.close()
 
-        // Migrate from v6 to v7 with MIGRATION_6_7
+        // Migrate from v6 to v8 with MIGRATION_6_7 then MIGRATION_7_8
         val roomDb = Room.databaseBuilder(context, ChatDatabase::class.java, dbName)
-            .addMigrations(ChatDatabase.MIGRATION_6_7)
+            .addMigrations(ChatDatabase.MIGRATION_6_7, ChatDatabase.MIGRATION_7_8)
             .build()
         database = roomDb
 
@@ -258,8 +264,15 @@ class ChatDatabaseMigrationTest {
         assertEquals("Thought process", assistant.reasoning)
         assertEquals("[{\"title\":\"Src\",\"url\":\"http://src.com\"}]", assistant.sources)
 
-        // Can update searchEnabled in v7
+        // Can update searchEnabled in v7+
         roomDb.conversationDao().setSearchEnabled("c6", true)
         assertTrue(roomDb.conversationDao().byId("c6")?.searchEnabled == true)
+
+        // The pre-existing provider gains the reasoning column, defaulting to unknown.
+        val provider = roomDb.providerDao().active()
+        assertNotNull(provider)
+        assertEquals("Gemini", provider?.name)
+        assertEquals(ReasoningSupport.UNSPECIFIED, provider?.reasoningSupport)
     }
+
 }

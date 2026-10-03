@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
+import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.theme.AppCodeFontFamily
 import com.assistant.app.ui.theme.AppShape
@@ -63,6 +64,7 @@ internal const val SettingsNameFieldTag = "settings_name_field"
 internal const val SettingsBaseUrlFieldTag = "settings_base_url_field"
 internal const val SettingsApiKeyFieldTag = "settings_api_key_field"
 internal const val SettingsModelFieldTag = "settings_model_field"
+internal const val SettingsReasoningFieldTag = "settings_reasoning_field"
 
 @Composable
 internal fun ProviderPage(
@@ -500,6 +502,49 @@ internal fun ProviderEditor(
             )
         }
 
+        // Reasoning capability: declared by the user, never inferred from the model name.
+        var reasoningOpen by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = reasoningOpen,
+            onExpandedChange = { reasoningOpen = it },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedTextField(
+                value = reasoningLabel(state.reasoningSupport),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(stringResource(R.string.settings_field_reasoning)) },
+                singleLine = true,
+                shape = AppShape.small,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningOpen) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+                    .testTag(SettingsReasoningFieldTag),
+                enabled = !state.isSaving,
+            )
+            ExposedDropdownMenu(
+                expanded = reasoningOpen,
+                onDismissRequest = { reasoningOpen = false },
+            ) {
+                ReasoningSupport.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(reasoningLabel(option)) },
+                        onClick = {
+                            reasoningOpen = false
+                            viewModel.setReasoningSupport(option)
+                        },
+                    )
+                }
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_reasoning_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = AppSpacing.xs),
+        )
+
         // Test connection button
         OutlinedButton(
             onClick = viewModel::testConnection,
@@ -625,3 +670,13 @@ internal fun ProviderEditor(
         }
     }
 }
+
+/** User-facing label for a declared provider reasoning capability. */
+@Composable
+private fun reasoningLabel(support: ReasoningSupport): String = stringResource(
+    when (support) {
+        ReasoningSupport.UNSPECIFIED -> R.string.settings_reasoning_unspecified
+        ReasoningSupport.EFFORT -> R.string.settings_reasoning_effort
+        ReasoningSupport.BUDGET -> R.string.settings_reasoning_budget
+    },
+)

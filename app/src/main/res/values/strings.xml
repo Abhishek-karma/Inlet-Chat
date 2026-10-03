@@ -102,6 +102,11 @@
     <string name="settings_field_base_url">Base URL</string>
     <string name="settings_field_api_key">API key</string>
     <string name="settings_field_model">Model</string>
+    <string name="settings_field_reasoning">Reasoning</string>
+    <string name="settings_reasoning_unspecified">Don\u2019t send (default)</string>
+    <string name="settings_reasoning_effort">Thinking levels (Low / Medium / High)</string>
+    <string name="settings_reasoning_budget">Thinking budget (tokens)</string>
+    <string name="settings_reasoning_hint">Reasoning parameters are only sent for a provider you have explicitly declared. Models without a declaration never receive them.</string>
     <!-- Placeholder shown in the API key field while a saved key exists. -->
     <string name="settings_api_key_saved_placeholder">••••••••</string>
     <string name="settings_show_key">Show</string>

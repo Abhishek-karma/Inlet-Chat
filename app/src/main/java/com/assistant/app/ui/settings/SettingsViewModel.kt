@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
+import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.SecureKeyStore
@@ -54,6 +55,7 @@ data class SettingsUiState(
     val name: String = "",
     val baseUrl: String = "",
     val model: String = "",
+    val reasoningSupport: ReasoningSupport = ReasoningSupport.UNSPECIFIED,
         val availableModels: List<String> = emptyList(),
     val isLoadingModels: Boolean = false,
         val modelsError: Boolean = false,
@@ -184,6 +186,7 @@ class SettingsViewModel(
                 name = "",
                 baseUrl = "",
                 model = "",
+                reasoningSupport = ReasoningSupport.UNSPECIFIED,
                 apiKeyInput = "",
                 storedKey = null,
                 revealKey = false,
@@ -219,6 +222,7 @@ class SettingsViewModel(
                     name = entity.name,
                     baseUrl = entity.baseUrl,
                     model = entity.model,
+                    reasoningSupport = entity.reasoningSupport,
                     apiKeyInput = "",
                     storedKey = providerStore.apiKey(id),
                     revealKey = false,
@@ -270,6 +274,8 @@ class SettingsViewModel(
 
     fun setModel(value: String) = updateEditor { it.copy(model = value) }
 
+    fun setReasoningSupport(value: ReasoningSupport) = updateEditor { it.copy(reasoningSupport = value) }
+
     fun setApiKeyInput(value: String) {
         _uiState.update { it.copy(apiKeyInput = value) }
         onFormChanged()
@@ -289,7 +295,12 @@ class SettingsViewModel(
         if (_uiState.value.isSaving) return
         viewModelScope.launch {
             val state = _uiState.value
-            val draft = ProviderDraft(state.name.trim(), state.baseUrl.trim(), state.model.trim())
+            val draft = ProviderDraft(
+                name = state.name.trim(),
+                baseUrl = state.baseUrl.trim(),
+                model = state.model.trim(),
+                reasoningSupport = state.reasoningSupport,
+            )
             val enteredKey = state.apiKeyInput.trim().ifEmpty { null }
             val error = providerStore.validate(state.editingId ?: 0, draft, enteredKey)
             _uiState.update { it.copy(formError = error) }

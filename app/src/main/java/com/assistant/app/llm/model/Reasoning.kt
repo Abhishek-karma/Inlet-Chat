@@ -15,12 +15,15 @@ sealed interface ReasoningConfig {
 enum class ReasoningEffort { LOW, MEDIUM, HIGH }
 
 /**
- * What reasoning control the active model actually exposes. [Unsupported]
- * means no reasoning parameter may be sent; the UI hides the control and the
- * request carries no reasoning config.
+ * What reasoning control the active provider is configured to expose.
+ * [Unsupported] and [Unknown] both mean "no reasoning parameter may be sent";
+ * the difference is whether support is explicitly absent or simply not known.
  */
 sealed interface ThinkCapability {
     data object Unsupported : ThinkCapability
+
+    /** No capability information is available; treated exactly like unsupported. */
+    data object Unknown : ThinkCapability
 
     /** Discrete levels, e.g. OpenAI `reasoning_effort` or Gemini `thinkingLevel`. */
     data class Effort(val levels: List<ReasoningEffort>) : ThinkCapability
@@ -37,9 +40,13 @@ sealed interface ThinkCapability {
     ) : ThinkCapability
 }
 
+/** True when reasoning is safe to send (an explicit [ThinkCapability.Effort] or [ThinkCapability.Budget]). */
+fun ThinkCapability.isReasoningSupported(): Boolean =
+    this is ThinkCapability.Effort || this is ThinkCapability.Budget
+
 /** True when [config] is a selection [capability] can express as-is. */
 fun ThinkCapability.accepts(config: ReasoningConfig): Boolean = when (this) {
-    ThinkCapability.Unsupported -> false
+    ThinkCapability.Unsupported, ThinkCapability.Unknown -> false
     is ThinkCapability.Effort -> config is ReasoningConfig.Effort && config.level in levels
     is ThinkCapability.Budget -> when (config) {
         ReasoningConfig.Auto -> allowAuto
@@ -53,7 +60,7 @@ fun ThinkCapability.accepts(config: ReasoningConfig): Boolean = when (this) {
 fun ThinkCapability.normalize(config: ReasoningConfig): ReasoningConfig {
     if (accepts(config)) return config
     return when (this) {
-        ThinkCapability.Unsupported -> ReasoningConfig.Auto
+        ThinkCapability.Unsupported, ThinkCapability.Unknown -> ReasoningConfig.Auto
         is ThinkCapability.Effort -> ReasoningConfig.Auto
         is ThinkCapability.Budget -> when (config) {
             is ReasoningConfig.Budget -> ReasoningConfig.Budget(config.tokens.coerceIn(minTokens, maxTokens))
@@ -72,32 +79,6 @@ fun ThinkCapability.budgetPresets(): List<Int> = when (this) {
             .sorted()
     else -> emptyList()
 }
-
-/**
- * The reasoning capability of a model, from its id alone. Only model families
- * with documented reasoning controls are matched; everything else is
- * [ThinkCapability.Unsupported], so no speculative parameter is ever sent.
- */
-fun thinkCapabilityFor(isGeminiProvider: Boolean, model: String): ThinkCapability {
-    val id = model.trim().lowercase().removePrefix("models/").substringAfterLast('/')
-    return if (isGeminiProvider) {
-        when {
-            id.startsWith("gemini-2.5-pro") -> ThinkCapability.Budget(128, 32768, allowOff = false, allowAuto = true)
-            id.startsWith("gemini-2.5-flash-lite") -> ThinkCapability.Budget(512, 24576, allowOff = true, allowAuto = false)
-            id.startsWith("gemini-2.5-flash") -> ThinkCapability.Budget(1, 24576, allowOff = true, allowAuto = true)
-            id.startsWith("gemini-3") -> ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH))
-            else -> ThinkCapability.Unsupported
-        }
-    } else {
-        when {
-            O_SERIES_PATTERN.matches(id) || id.startsWith("gpt-5") ->
-                ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH))
-            else -> ThinkCapability.Unsupported
-        }
-    }
-}
-
-private val O_SERIES_PATTERN = Regex("^o[134]($|[-.]).*|^o[134]$")
 
 /** Compact stable encoding for persistence; [decodeReasoningConfig] reverses it. */
 fun ReasoningConfig.encode(): String = when (this) {

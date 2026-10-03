@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
 import com.assistant.app.data.local.ChatDatabase
+import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.InMemorySecureKeyStore
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,29 @@ class ProviderStoreTest {
 
         store.updateProvider(id, validDraft, "sk-replacement")
         assertEquals("sk-replacement", store.apiKey(id))
+    }
+
+    @Test
+    fun reasoningSupportDefaultsToUnspecifiedAndRoundTripsWhenUpdated() = runTest {
+        val id = store.addProvider(validDraft, "sk-1")
+
+        // An added provider carries no declared reasoning support: unknown.
+        assertEquals(
+            ReasoningSupport.UNSPECIFIED,
+            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
+        )
+
+        store.updateProvider(id, validDraft.copy(reasoningSupport = ReasoningSupport.EFFORT), null)
+        assertEquals(
+            ReasoningSupport.EFFORT,
+            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
+        )
+
+        store.updateProvider(id, validDraft.copy(reasoningSupport = ReasoningSupport.BUDGET), null)
+        assertEquals(
+            ReasoningSupport.BUDGET,
+            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
+        )
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.assistant.app.data
 
 import com.assistant.app.data.local.ChatDatabase
 import com.assistant.app.data.local.ProviderEntity
+import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.SecureKeyStore
 import java.net.URI
@@ -16,6 +17,7 @@ data class ProviderDraft(
     val name: String = "",
     val baseUrl: String = "",
     val model: String = "",
+    val reasoningSupport: ReasoningSupport = ReasoningSupport.UNSPECIFIED,
 )
 
 /**
@@ -122,6 +124,7 @@ class ProviderStore(
                 name = draft.name.trim(),
                 baseUrl = normalizedUrl,
                 model = draft.model.trim(),
+                reasoningSupport = draft.reasoningSupport,
             ),
         )
         if (!apiKey.isNullOrBlank()) {
@@ -146,7 +149,13 @@ class ProviderStore(
         if (!apiKey.isNullOrBlank()) {
             withContext(ioDispatcher) { keyStore.setApiKey(id, apiKey) }
         }
-        db.providerDao().update(id, draft.name.trim(), normalizedUrl, draft.model.trim())
+        db.providerDao().update(
+            id,
+            draft.name.trim(),
+            normalizedUrl,
+            draft.model.trim(),
+            draft.reasoningSupport,
+        )
     }
 
     /**

@@ -55,6 +55,7 @@ import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.ThinkCapability
 import com.assistant.app.llm.model.budgetPresets
+import com.assistant.app.llm.model.isReasoningSupported
 import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
@@ -278,7 +279,7 @@ fun Composer(
                         }
                     }
 
-                    if (thinkCapability !is ThinkCapability.Unsupported) {
+                    if (thinkCapability.isReasoningSupported()) {
                         ThinkControl(
                             capability = thinkCapability,
                             selected = thinkConfig,
@@ -419,7 +420,7 @@ private fun ThinkControl(
 
 /** The reasoning choices the active model supports, in menu order. */
 private fun thinkOptions(capability: ThinkCapability): List<ReasoningConfig> = when (capability) {
-    ThinkCapability.Unsupported -> emptyList()
+    ThinkCapability.Unsupported, ThinkCapability.Unknown -> emptyList()
     is ThinkCapability.Effort -> buildList {
         add(ReasoningConfig.Auto)
         capability.levels.forEach { add(ReasoningConfig.Effort(it)) }

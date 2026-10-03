@@ -3,7 +3,8 @@ package com.assistant.app.data
 import com.assistant.app.llm.GeminiProvider
 import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.OpenAICompatibleProvider
-import com.assistant.app.llm.model.thinkCapabilityFor
+import com.assistant.app.llm.model.ReasoningEffort
+import com.assistant.app.llm.model.ThinkCapability
 import com.assistant.app.ui.settings.isGemini
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +60,7 @@ class LlmProviderCoordinator(
                             model = model,
                             providerId = active.id,
                             name = active.name,
-                            thinkCapability = thinkCapabilityFor(isGemini(baseUrl, active.name), model),
+                            thinkCapability = active.reasoningSupport.toThinkCapability(),
                         )
                     }
                 }

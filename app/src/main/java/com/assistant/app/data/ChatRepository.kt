@@ -13,6 +13,7 @@ import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.Role
 import com.assistant.app.llm.model.ThinkCapability
+import com.assistant.app.llm.model.isReasoningSupported
 import com.assistant.app.llm.model.normalize
 import com.assistant.app.llm.model.SearchOutcome
 import com.assistant.app.llm.model.SearchResult
@@ -102,7 +103,7 @@ class ChatRepository(
     /** Updates the Think selection and persists it for the active model. */
     suspend fun setThinkConfig(config: ReasoningConfig) {
         val capability = _uiState.value.thinkCapability
-        if (capability is ThinkCapability.Unsupported) return
+        if (!capability.isReasoningSupported()) return
         val model = (chatLlm.value as? ChatLlmState.Ready)?.model ?: return
         val normalized = capability.normalize(config)
         _uiState.update { it.copy(thinkConfig = normalized) }
@@ -548,9 +549,10 @@ class ChatRepository(
         _uiState.update { it.copy(status = ChatStatus.Generating) }
 
         // Captured once here: changing the Think control while this response
-        // streams cannot alter the request already being built below.
+        // streams cannot alter the request already being built below. A profile
+        // without declared reasoning support (or unknown) sends no parameter.
         val reasoning = when {
-            llm.thinkCapability is ThinkCapability.Unsupported -> null
+            !llm.thinkCapability.isReasoningSupported() -> null
             _uiState.value.thinkConfig is ReasoningConfig.Auto -> null
             else -> _uiState.value.thinkConfig
         }
