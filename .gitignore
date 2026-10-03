@@ -34,3 +34,5 @@ stitch_application_interface_builder/-e
 # AI Studio local
 metadata.json
 .env.example
+.ideavo/project
+*.log
