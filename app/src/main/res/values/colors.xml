@@ -2,7 +2,7 @@
 <resources>
     <!-- Matches the app surface in each mode so the launch window does not
          flash a different colour before Compose draws. -->
-    <color name="splash_background">#FAFBFB</color>
-    <!-- The one brand colour of the Inlet mark. -->
-    <color name="inlet_mark">#00696B</color>
+    <color name="splash_background">#FFFFFF</color>
+    <!-- The mark: plain ink on paper. -->
+    <color name="inlet_mark">#111111</color>
 </resources>

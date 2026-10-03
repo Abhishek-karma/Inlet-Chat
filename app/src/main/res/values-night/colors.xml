@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_background">#0B1012</color>
-    <!-- Lifted from the day value so the mark holds contrast on the dark
-         splash surface. Same hue, so the splash keeps its identity. -->
-    <color name="inlet_mark">#4FB3AE</color>
+    <color name="splash_background">#000000</color>
+    <!-- White ink so the mark holds contrast on the black splash surface. -->
+    <color name="inlet_mark">#F2F2F2</color>
 </resources>
