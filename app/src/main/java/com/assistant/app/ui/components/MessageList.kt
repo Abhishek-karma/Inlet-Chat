@@ -1,6 +1,7 @@
 package com.assistant.app.ui.components
 
 import android.content.ClipData
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -247,7 +250,9 @@ private fun MessageItem(
                         WaitingIndicator(modifier = Modifier.padding(top = AppSpacing.xs))
                     }
 
-                    if (message.sources.isNotEmpty()) {
+                    // Citations stay out of the way while the answer streams
+                    // and appear as a compact row once it completes.
+                    if (!streaming && message.sources.isNotEmpty()) {
                         SearchCitationsList(sources = message.sources)
                     }
 
@@ -516,45 +521,53 @@ private fun ReasoningSection(
     }
 }
 
+/** One compact, horizontally scrollable row of source domain chips. */
 @Composable
 private fun SearchCitationsList(sources: List<SearchResult>) {
     val uriHandler = LocalUriHandler.current
-    Column(modifier = Modifier.padding(top = AppSpacing.xs)) {
+    Row(
+        modifier = Modifier
+            .padding(top = AppSpacing.xs)
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+    ) {
         sources.forEach { source ->
             Surface(
                 onClick = { if (isWebUrl(source.url)) uriHandler.openUri(source.url) },
-                shape = AppShape.small,
+                shape = AppShape.pill,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                modifier = Modifier
-                    .padding(vertical = 2.dp)
-                    .fillMaxWidth(),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = AppSpacing.sm, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = AppSpacing.sm, vertical = 4.dp),
                 ) {
                     Icon(
                         painter = painterResource(AppIcons.Globe),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp),
                     )
+                    Spacer(Modifier.width(4.dp))
                     Text(
-                        text = source.title,
+                        text = domainOf(source.url),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = AppSpacing.sm),
                     )
                 }
             }
         }
     }
 }
+
+/** The host of [url] without its `www.`, or the raw url when unparseable. */
+private fun domainOf(url: String): String =
+    try {
+        Uri.parse(url).host?.removePrefix("www.") ?: url
+    } catch (_: Exception) {
+        url
+    }
 
 @Composable
 private fun VersionSwitcher(
