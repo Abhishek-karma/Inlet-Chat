@@ -1,6 +1,7 @@
 package com.assistant.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -11,9 +12,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +39,9 @@ import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
 /**
- * Inlet Top Bar: Rock-solid, stable navigation and model indicator without startup jitter.
+ * Chat top bar: transparent at rest so the conversation stays the visual
+ * priority; when content scrolls beneath it, a scrim and hairline fade in
+ * to keep the title and icons readable.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,29 +50,33 @@ fun AssistantTopBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     onOpenDrawer: (() -> Unit)? = null,
-    onNewChat: (() -> Unit)? = null,
     onSearch: (() -> Unit)? = null,
     onToggleVoiceOutput: (() -> Unit)? = null,
     voiceOutputEnabled: Boolean = false,
     activeProvider: ProviderEntity? = null,
     savedProviders: List<ProviderEntity> = emptyList(),
     onProviderSelected: ((Long) -> Unit)? = null,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
-    val barColor = MaterialTheme.colorScheme.background
+    val scrim = MaterialTheme.colorScheme.background.copy(alpha = 0.94f)
     val hairline = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
     TopAppBar(
         modifier = modifier.drawBehind {
-            drawLine(
-                color = hairline,
-                strokeWidth = 0.5.dp.toPx(),
-                start = Offset(0f, size.height),
-                end = Offset(size.width, size.height),
-            )
+            val overlap = scrollBehavior?.state?.overlappedFraction ?: 0f
+            if (overlap > 0.02f) {
+                drawLine(
+                    color = hairline.copy(alpha = hairline.alpha * overlap),
+                    strokeWidth = 0.5.dp.toPx(),
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                )
+            }
         },
+        scrollBehavior = scrollBehavior,
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = barColor,
-            scrolledContainerColor = barColor,
+            containerColor = Color.Transparent,
+            scrolledContainerColor = scrim,
         ),
         navigationIcon = {
             when {
@@ -77,13 +87,11 @@ fun AssistantTopBar(
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                onOpenDrawer != null -> IconButton(onClick = onOpenDrawer) {
-                    Icon(
-                        painter = painterResource(AppIcons.Menu),
-                        contentDescription = stringResource(R.string.cd_open_drawer),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                onOpenDrawer != null -> TopBarChip(
+                    contentDescription = stringResource(R.string.cd_open_drawer),
+                    icon = AppIcons.Menu,
+                    onClick = onOpenDrawer,
+                )
             }
         },
         title = {
@@ -154,38 +162,46 @@ fun AssistantTopBar(
         },
         actions = {
             if (onSearch != null) {
-                IconButton(onClick = onSearch) {
-                    Icon(
-                        painter = painterResource(AppIcons.Search),
-                        contentDescription = stringResource(R.string.drawer_search),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                TopBarChip(
+                    contentDescription = stringResource(R.string.drawer_search),
+                    icon = AppIcons.Search,
+                    onClick = onSearch,
+                )
             }
             if (onToggleVoiceOutput != null) {
-                IconButton(onClick = onToggleVoiceOutput) {
-                    Icon(
-                        painter = painterResource(
-                            if (voiceOutputEnabled) AppIcons.SpeakerOn else AppIcons.SpeakerOff,
-                        ),
-                        contentDescription = stringResource(R.string.cd_toggle_speaker),
-                        tint = if (voiceOutputEnabled) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-            if (onNewChat != null) {
-                IconButton(onClick = onNewChat) {
-                    Icon(
-                        painter = painterResource(AppIcons.Add),
-                        contentDescription = stringResource(R.string.cd_new_chat),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                TopBarChip(
+                    contentDescription = stringResource(R.string.cd_toggle_speaker),
+                    icon = if (voiceOutputEnabled) AppIcons.SpeakerOn else AppIcons.SpeakerOff,
+                    active = voiceOutputEnabled,
+                    onClick = onToggleVoiceOutput,
+                )
             }
         },
     )
+}
+
+/** Icon on a quiet pill container, matching the composer's action pills. */
+@Composable
+private fun TopBarChip(
+    contentDescription: String,
+    icon: Int,
+    onClick: () -> Unit,
+    active: Boolean = false,
+) {
+    val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        shape = AppShape.pill,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.size(36.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }

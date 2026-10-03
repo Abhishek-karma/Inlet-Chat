@@ -22,12 +22,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
@@ -43,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +57,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -65,11 +73,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
@@ -93,9 +103,13 @@ import com.assistant.app.ui.theme.appTween
 import kotlinx.coroutines.launch
 import java.io.File
 
+/** Material 3 top app bar height; the transparent bar's content area. */
+private val TOP_BAR_HEIGHT = 64.dp
+
 /**
  * Primary chat canvas composing model top bar, message list, empty states, and composer.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     onOpenSettings: () -> Unit,
@@ -404,6 +418,8 @@ fun ChatScreen(
         }
     }
 
+    val topBarBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -418,21 +434,25 @@ fun ChatScreen(
                 activeProvider = activeProvider,
                 savedProviders = savedProviders,
                 onProviderSelected = viewModel::activateProvider,
-                onNewChat = if (state.conversationId != null) {
-                    {
-                        editingMessageId = null
-                        viewModel.newConversation()
-                    }
-                } else {
-                    null
-                },
+                scrollBehavior = topBarBehavior,
             )
         },
     ) { innerPadding ->
+        // The status bar stays solid (content never draws beneath it); only
+        // the 64dp bar area is transparent, with messages scrolling beneath it.
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val barTop = TOP_BAR_HEIGHT
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(
+                    PaddingValues(
+                        start = innerPadding.calculateStartPadding(LocalLayoutDirection.current),
+                        top = statusBarTop,
+                        end = innerPadding.calculateEndPadding(LocalLayoutDirection.current),
+                        bottom = innerPadding.calculateBottomPadding(),
+                    ),
+                )
                 .consumeWindowInsets(innerPadding)
                 .imePadding(),
         ) {
@@ -447,22 +467,24 @@ fun ChatScreen(
                 label = "chatRegion",
             ) { region ->
                 when (region) {
-                    0 -> when {
-                        isPendingLoad || isInitialLoading -> {
-                            Box(modifier = Modifier.fillMaxSize())
-                        }
-                        showSetupPrompt -> {
-                            SetupRequired(
-                                onOpenSettings = onOpenSettings,
-                                onOpenProviderSetup = onOpenProviderSetup,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        else -> {
-                            EmptyHome(
-                                onPromptSelected = viewModel::setDraft,
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                    0 -> Box(modifier = Modifier.fillMaxSize().padding(top = barTop)) {
+                        when {
+                            isPendingLoad || isInitialLoading -> {
+                                Box(modifier = Modifier.fillMaxSize())
+                            }
+                            showSetupPrompt -> {
+                                SetupRequired(
+                                    onOpenSettings = onOpenSettings,
+                                    onOpenProviderSetup = onOpenProviderSetup,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            else -> {
+                                EmptyHome(
+                                    onPromptSelected = viewModel::setDraft,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                     }
 
@@ -480,6 +502,7 @@ fun ChatScreen(
                                 listState = listState,
                                 showReasoning = reasoningVisible,
                                 onSpeakMessage = if (viewModel.speakAvailable) viewModel::speakMessage else null,
+                                topPadding = barTop,
                                 modifier = Modifier.fillMaxWidth(),
                             )
 

@@ -1,6 +1,7 @@
 package com.assistant.app.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.ui.test.assertIsDisplayed
@@ -35,6 +36,7 @@ import org.robolectric.annotation.Config
  * Robolectric Compose test for the chat screen shell: top bar identity,
  * drawer access, and the empty-state statement.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class ChatScreenShellTest {

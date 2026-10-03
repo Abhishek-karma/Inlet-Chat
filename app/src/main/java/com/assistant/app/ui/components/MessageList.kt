@@ -56,6 +56,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
 import com.assistant.app.data.ChatStatus
@@ -93,6 +94,8 @@ fun MessageList(
     modifier: Modifier = Modifier,
     showReasoning: Boolean = true,
     onSpeakMessage: ((String) -> Unit)? = null,
+    /** Top content padding; lets the first message clear a transparent top bar. */
+    topPadding: Dp = AppSpacing.lg,
 ) {
     LazyColumn(
         modifier = modifier
@@ -104,7 +107,7 @@ fun MessageList(
         contentPadding = PaddingValues(
             start = AppSpacing.lg,
             end = AppSpacing.lg,
-            top = AppSpacing.lg,
+            top = topPadding,
             bottom = AppSpacing.sm,
         ),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.xl),

@@ -38,6 +38,9 @@ import com.assistant.app.ui.theme.AppCodeFontFamily
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
+/** Narrower than the Material default (360 dp) so the drawer stays compact. */
+private val DRAWER_WIDTH = 300.dp
+
 private enum class DrawerDestination(val icon: Int, val labelRes: Int) {
     NewChat(AppIcons.Add, R.string.drawer_new_chat),
     History(AppIcons.History, R.string.drawer_history),
@@ -63,6 +66,7 @@ fun AppDrawer(
             ModalDrawerSheet(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+                modifier = Modifier.width(DRAWER_WIDTH),
             ) {
                 Column(
                     modifier = Modifier

@@ -1,7 +1,6 @@
 package com.assistant.app.ui.chat
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -124,27 +123,6 @@ class ChatScreenTest {
         waitUntilText("Hello")
         composeRule.onNodeWithText("Hi").assertIsDisplayed()
         composeRule.onNodeWithText("Hello").assertIsDisplayed()
-
-        // An open conversation gains the new-chat action.
-        composeRule.onNodeWithContentDescription(string(R.string.cd_new_chat)).assertIsDisplayed()
-    }
-
-    @Test
-    fun newChatClearsTheConversationAndHidesTheAction() {
-        val fixture = ScriptedChatFixture(listOf(ScriptedEvent.Emit("Hello")))
-        setContent(fixture)
-        typeAndSend("Hi")
-        waitUntilText("Hello")
-
-        composeRule.onNodeWithContentDescription(string(R.string.cd_new_chat)).performClick()
-
-        composeRule.onNodeWithText(string(R.string.chat_empty_statement)).assertIsDisplayed()
-        composeRule.onNodeWithContentDescription(string(R.string.cd_new_chat)).assertDoesNotExist()
-
-        // The draft belonged to the old conversation: the fresh composer is empty.
-        val editableText = composeRule.onNodeWithTag(ComposerInputTag)
-            .fetchSemanticsNode().config[SemanticsProperties.EditableText]
-        assertEquals("", editableText.text)
     }
 
     @Test
