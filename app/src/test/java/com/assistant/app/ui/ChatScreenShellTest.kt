@@ -163,7 +163,7 @@ class ChatScreenShellTest {
     }
 
     @Test
-    fun autoFollowOnlyStopsOnceTheUserScrollsBeyondTheThreshold() {
+    fun onlyBounceSizedDriftStillCountsAsBeingAtTheBottom() {
         lateinit var listState: LazyListState
         composeRule.setContent {
             ChatTheme {
@@ -181,13 +181,14 @@ class ChatScreenShellTest {
         // Pinned to the newest item: streaming would follow along.
         composeRule.runOnIdle { assertTrue(listState.isNearBottom(0f)) }
 
-        // A few pixels of drift (bounce, a short fling) still counts as following.
-        composeRule.runOnIdle { runBlocking { listState.scrollBy(40f) } }
-        composeRule.runOnIdle { assertTrue(listState.isNearBottom(120f)) }
+        // A few pixels of overscroll or rounding still counts as the bottom,
+        // so a bounce never hands control to the app.
+        composeRule.runOnIdle { runBlocking { listState.scrollBy(20f) } }
+        composeRule.runOnIdle { assertTrue(listState.isNearBottom(64f)) }
 
-        // Past the threshold the user has taken over, so the app stops following.
+        // Real scrolling away is not the bottom any more.
         composeRule.runOnIdle { runBlocking { listState.scrollBy(400f) } }
-        composeRule.runOnIdle { assertFalse(listState.isNearBottom(120f)) }
+        composeRule.runOnIdle { assertFalse(listState.isNearBottom(64f)) }
     }
 
     @Test

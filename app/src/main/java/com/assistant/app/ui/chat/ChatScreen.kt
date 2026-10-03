@@ -17,6 +17,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -266,15 +267,20 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
     val listScope = rememberCoroutineScope()
-    val followThresholdPx = with(LocalDensity.current) { FOLLOW_THRESHOLD.toPx() }
+    val dragged by listState.interactionSource.collectIsDraggedAsState()
 
-    // Auto-follow yields to the user: only a deliberate scroll beyond the
-    // threshold hands control back, and returning near the bottom takes it again.
+    // The user takes over the moment they drag the conversation, however small
+    // the movement; following resumes only once they are back at the newest
+    // content. The tolerance is for bounce, not for reading back.
     var followLatest by remember { mutableStateOf(true) }
-    LaunchedEffect(listState, followThresholdPx) {
-        snapshotFlow { listState.isNearBottom(followThresholdPx) }
+    LaunchedEffect(dragged) {
+        if (dragged) followLatest = false
+    }
+    val bounceTolerancePx = with(LocalDensity.current) { BOUNCE_TOLERANCE.toPx() }
+    LaunchedEffect(listState, bounceTolerancePx) {
+        snapshotFlow { listState.isNearBottom(bounceTolerancePx) }
             .distinctUntilChanged()
-            .collect { nearBottom -> followLatest = nearBottom }
+            .collect { atBottom -> if (atBottom) followLatest = true }
     }
     val lastMessage = state.messages.lastOrNull()
     LaunchedEffect(lastMessage?.id, lastMessage?.content?.length) {
@@ -631,8 +637,9 @@ fun ChatScreen(
     }
 }
 
-/** Pinned within [thresholdPx] of the newest item counts as still following. */
+/** Within [thresholdPx] of the newest item still counts as sitting at the bottom. */
 internal fun LazyListState.isNearBottom(thresholdPx: Float): Boolean =
     firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset <= thresholdPx
 
-private val FOLLOW_THRESHOLD = 100.dp
+/** Slack that absorbs overscroll and rounding, not real user scrolling. */
+private val BOUNCE_TOLERANCE = 32.dp
