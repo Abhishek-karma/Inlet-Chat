@@ -5,6 +5,8 @@ import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.model.ChatChunk
 import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ProviderError
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.Role
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -212,6 +214,46 @@ class GeminiProviderTest {
         val recorded = server.takeRequest()
         assertEquals("AIzaSyValidKey", recorded.getHeader("x-goog-api-key"))
         assertTrue(recorded.path!!.contains("models/gemini-3.6-flash:streamGenerateContent?alt=sse"))
+    }
+
+    @Test
+    fun `thinking budget maps into generationConfig thinkingConfig`() {
+        server.enqueue(MockResponse().setBody(geminiChunk("ok") + "data: [DONE]\n\n"))
+
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Budget(4096)))
+
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val thinkingConfig = body.getJSONObject("generationConfig").getJSONObject("thinkingConfig")
+        assertEquals(4096, thinkingConfig.getInt("thinkingBudget"))
+    }
+
+    @Test
+    fun `off maps to thinkingBudget zero and effort maps to thinkingLevel`() {
+        server.enqueue(MockResponse().setBody(geminiChunk("ok") + "data: [DONE]\n\n"))
+        server.enqueue(MockResponse().setBody(geminiChunk("ok") + "data: [DONE]\n\n"))
+
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Off))
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Effort(ReasoningEffort.LOW)))
+
+        val offBody = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals(0, offBody.getJSONObject("generationConfig").getJSONObject("thinkingConfig").getInt("thinkingBudget"))
+
+        val effortBody = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("low", effortBody.getJSONObject("generationConfig").getJSONObject("thinkingConfig").getString("thinkingLevel"))
+    }
+
+    @Test
+    fun `auto and null reasoning send no thinkingConfig`() {
+        server.enqueue(MockResponse().setBody(geminiChunk("ok") + "data: [DONE]\n\n"))
+        server.enqueue(MockResponse().setBody(geminiChunk("ok") + "data: [DONE]\n\n"))
+
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Auto))
+        collect(provider(), request())
+
+        repeat(2) {
+            val body = JSONObject(server.takeRequest().body.readUtf8())
+            assertFalse(body.has("generationConfig"))
+        }
     }
 
     @Test

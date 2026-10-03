@@ -1,6 +1,8 @@
 package com.assistant.app.data
 
 import com.assistant.app.llm.LlmProvider
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.ThinkCapability
 import com.assistant.app.llm.model.UiAttachment
 import com.assistant.app.llm.model.UiMessage
 
@@ -51,6 +53,10 @@ data class ChatUiState(
     val searchNotice: String? = null,
     /** Whether attachments are currently being processed or ingested. */
     val isIngestingAttachments: Boolean = false,
+    /** Reasoning control the active model exposes; [ThinkCapability.Unsupported] hides the Think control. */
+    val thinkCapability: ThinkCapability = ThinkCapability.Unsupported,
+    /** The selected reasoning configuration, captured when a generation starts. */
+    val thinkConfig: ReasoningConfig = ReasoningConfig.Auto,
 )
 
 /**
@@ -63,6 +69,8 @@ sealed interface ChatLlmState {
         val model: String,
         val providerId: Long = 0,
         val name: String = "",
+        /** What reasoning control the active model exposes. */
+        val thinkCapability: ThinkCapability = ThinkCapability.Unsupported,
     ) : ChatLlmState
     data object NeedsSetup : ChatLlmState
 }

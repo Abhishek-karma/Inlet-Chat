@@ -145,6 +145,17 @@
     <string name="settings_reasoning_description">Shows the model\u2019s real reasoning above its answer when the provider sends it.</string>
     <string name="reasoning_header">Reasoning</string>
     <string name="cd_toggle_reasoning">Show or hide reasoning</string>
+    <string name="status_thinking">Thinking…</string>
+
+    <!-- Think control (reasoning selection in the composer). -->
+    <string name="think_label">Think</string>
+    <string name="cd_toggle_think">Choose how much the model thinks</string>
+    <string name="think_auto">Auto</string>
+    <string name="think_off">Off</string>
+    <string name="think_low">Low</string>
+    <string name="think_medium">Medium</string>
+    <string name="think_high">High</string>
+    <string name="think_budget_option">%1$d tokens</string>
 
     <!-- Voice input hints (inline, above the composer). -->
     <string name="voice_no_match_hint">Didn\u2019t catch that — try again.</string>

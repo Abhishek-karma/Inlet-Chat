@@ -3,6 +3,7 @@ package com.assistant.app.llm
 import com.assistant.app.llm.model.ChatChunk
 import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ProviderError
+import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.Role
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -287,6 +288,11 @@ class OpenAICompatibleProvider(
         val payload = JSONObject().apply {
             put("model", request.model.ifBlank { model })
             put("stream", true)
+            // Only the documented OpenAI reasoning-effort parameter; models
+            // without it never get a reasoning field (capability-gated upstream).
+            (request.reasoning as? ReasoningConfig.Effort)?.let {
+                put("reasoning_effort", it.level.name.lowercase())
+            }
             put("messages", JSONArray().apply {
                 request.messages.forEachIndexed { index, (role, content) ->
                     val message = JSONObject().put("role", role.name.lowercase())

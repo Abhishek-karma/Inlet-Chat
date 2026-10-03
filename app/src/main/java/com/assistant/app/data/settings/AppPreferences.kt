@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.decodeReasoningConfig
+import com.assistant.app.llm.model.encode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -144,6 +147,23 @@ class AppPreferences(
         dataStore.edit { prefs -> prefs[KEY_AUTO_CHECK_UPDATES] = enabled }
     }
 
+    /**
+     * The saved Think selection for [model], or null when none was stored.
+     * One key per model, so switching models keeps each preference intact.
+     */
+    suspend fun thinkSelection(model: String): ReasoningConfig? {
+        val prefs = dataStore.data.first()
+        return prefs[stringPreferencesKey(THINK_KEY_PREFIX + model.trim().lowercase())]
+            ?.let { decodeReasoningConfig(it) }
+    }
+
+    /** Persists the Think selection for [model]. */
+    suspend fun setThinkSelection(model: String, config: ReasoningConfig) {
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(THINK_KEY_PREFIX + model.trim().lowercase())] = config.encode()
+        }
+    }
+
     /** Timestamp of the last update check in milliseconds. */
     val lastUpdateCheckTime: Flow<Long> = dataStore.data.map { prefs -> prefs[KEY_LAST_UPDATE_CHECK_TIME] ?: 0L }
 
@@ -212,6 +232,7 @@ class AppPreferences(
 
     companion object {
         private const val DATA_STORE_FILE = "provider_settings.preferences_pb"
+        private const val THINK_KEY_PREFIX = "think_model_"
 
         private val KEY_ID = longPreferencesKey("id")
         private val KEY_NAME = stringPreferencesKey("name")

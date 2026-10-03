@@ -111,6 +111,8 @@ class AppContainer(context: Context) {
             followUpSuggestions = { provider, model, question, answer ->
                 FollowUpSuggestions.generate(provider, model, question, answer)
             },
+            loadThinkSelection = { model -> appPreferences.thinkSelection(model) },
+            saveThinkSelection = { model, config -> appPreferences.setThinkSelection(model, config) },
             attachmentsDir = attachmentIngester.attachmentsDir,
             webSearch = { query ->
                 val client = httpClient

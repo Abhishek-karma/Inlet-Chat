@@ -3,11 +3,7 @@ package com.assistant.app.ui.components
 import android.content.ClipData
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -32,7 +28,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -421,7 +416,7 @@ private fun ErrorMessageBanner(
     }
 }
 
-/** Ambient pulsing indicator while waiting for response tokens */
+/** Ambient rotating orb shown while waiting for response tokens */
 @Composable
 private fun WaitingIndicator(modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(false) }
@@ -431,35 +426,23 @@ private fun WaitingIndicator(modifier: Modifier = Modifier) {
     }
     if (!visible) return
 
-    val transition = rememberInfiniteTransition(label = "waiting")
+    ThinkingOrbWithLabel(modifier = modifier.padding(vertical = 6.dp))
+}
+
+/** Orb and status word shown together while waiting for response tokens */
+@Composable
+private fun ThinkingOrbWithLabel(modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        repeat(3) { index ->
-            val phase by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 650, delayMillis = index * 180),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot_$index",
-            )
-            val scale = 0.7f + 0.4f * phase
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = 0.3f + 0.7f * phase
-                    }
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-            )
-        }
+        ThinkingOrb()
+        Spacer(Modifier.width(AppSpacing.sm))
+        Text(
+            text = stringResource(R.string.status_thinking),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

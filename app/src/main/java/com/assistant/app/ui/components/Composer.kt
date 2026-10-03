@@ -20,18 +20,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +51,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
 import com.assistant.app.data.VoiceStatus
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.ReasoningEffort
+import com.assistant.app.llm.model.ThinkCapability
+import com.assistant.app.llm.model.budgetPresets
 import com.assistant.app.ui.theme.AppDimens
 import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppShape
@@ -123,6 +132,9 @@ fun Composer(
     onAttachClick: (() -> Unit)? = null,
     searchActive: Boolean = false,
     onToggleSearch: (() -> Unit)? = null,
+    thinkCapability: ThinkCapability = ThinkCapability.Unsupported,
+    thinkConfig: ReasoningConfig = ReasoningConfig.Auto,
+    onThinkSelect: (ReasoningConfig) -> Unit = {},
     topPadding: androidx.compose.ui.unit.Dp = AppSpacing.sm,
 ) {
     val haptics = rememberHaptics()
@@ -265,6 +277,17 @@ fun Composer(
                             }
                         }
                     }
+
+                    if (thinkCapability !is ThinkCapability.Unsupported) {
+                        ThinkControl(
+                            capability = thinkCapability,
+                            selected = thinkConfig,
+                            onSelect = {
+                                haptics(HapticFeedbackType.TextHandleMove)
+                                onThinkSelect(it)
+                            },
+                        )
+                    }
                 }
 
                 // Right Contextual Controls (Mic & Send/Stop)
@@ -332,6 +355,94 @@ fun Composer(
             }
         }
     }
+}
+
+@Composable
+private fun ThinkControl(
+    capability: ThinkCapability,
+    selected: ReasoningConfig,
+    onSelect: (ReasoningConfig) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val active = selected !is ReasoningConfig.Auto
+    val tint = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Box {
+        Surface(
+            onClick = { open = true },
+            shape = AppShape.pill,
+            color = if (active) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                Color.Transparent
+            },
+            modifier = Modifier.height(36.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = AppSpacing.md),
+            ) {
+                Icon(
+                    painter = painterResource(AppIcons.Brain),
+                    contentDescription = stringResource(R.string.cd_toggle_think),
+                    tint = tint,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(AppSpacing.xs))
+                Text(
+                    text = stringResource(R.string.think_label),
+                    style = MaterialTheme.typography.labelMedium.copy(color = tint),
+                )
+            }
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            thinkOptions(capability).forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(thinkOptionLabel(option)) },
+                    trailingIcon = {
+                        RadioButton(selected = option == selected, onClick = null)
+                    },
+                    onClick = {
+                        open = false
+                        onSelect(option)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The reasoning choices the active model supports, in menu order. */
+private fun thinkOptions(capability: ThinkCapability): List<ReasoningConfig> = when (capability) {
+    ThinkCapability.Unsupported -> emptyList()
+    is ThinkCapability.Effort -> buildList {
+        add(ReasoningConfig.Auto)
+        capability.levels.forEach { add(ReasoningConfig.Effort(it)) }
+    }
+    is ThinkCapability.Budget -> buildList {
+        if (capability.allowAuto) add(ReasoningConfig.Auto)
+        if (capability.allowOff) add(ReasoningConfig.Off)
+        capability.budgetPresets().forEach { add(ReasoningConfig.Budget(it)) }
+    }
+}
+
+@Composable
+private fun thinkOptionLabel(option: ReasoningConfig): String = when (option) {
+    ReasoningConfig.Auto -> stringResource(R.string.think_auto)
+    ReasoningConfig.Off -> stringResource(R.string.think_off)
+    is ReasoningConfig.Effort -> stringResource(
+        when (option.level) {
+            ReasoningEffort.LOW -> R.string.think_low
+            ReasoningEffort.MEDIUM -> R.string.think_medium
+            ReasoningEffort.HIGH -> R.string.think_high
+        },
+    )
+    is ReasoningConfig.Budget -> stringResource(R.string.think_budget_option, option.tokens)
 }
 
 @Composable

@@ -5,6 +5,8 @@ import com.assistant.app.llm.OpenAICompatibleProvider
 import com.assistant.app.llm.model.ChatChunk
 import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ProviderError
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.Role
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -105,6 +107,45 @@ class OpenAICompatibleProviderTest {
 
         val body = JSONObject(server.takeRequest().body.readUtf8())
         assertEquals("Hi", body.getJSONArray("messages").getJSONObject(0).get("content"))
+    }
+
+    @Test
+    fun `reasoning_effort is sent for an effort reasoning config`() {
+        server.enqueue(MockResponse().setBody(delta("ok") + "data: [DONE]\n\n"))
+
+        collect(
+            provider(),
+            request().copy(reasoning = ReasoningConfig.Effort(ReasoningEffort.MEDIUM)),
+        )
+
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("medium", body.getString("reasoning_effort"))
+    }
+
+    @Test
+    fun `no reasoning parameter is sent without a reasoning config`() {
+        server.enqueue(MockResponse().setBody(delta("ok") + "data: [DONE]\n\n"))
+
+        collect(provider(), request())
+
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertFalse(body.has("reasoning_effort"))
+        assertFalse(body.has("reasoning"))
+    }
+
+    @Test
+    fun `off and budget reasoning configs send nothing to openai-compatible endpoints`() {
+        server.enqueue(MockResponse().setBody(delta("ok") + "data: [DONE]\n\n"))
+        server.enqueue(MockResponse().setBody(delta("ok") + "data: [DONE]\n\n"))
+
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Off))
+        collect(provider(), request().copy(reasoning = ReasoningConfig.Budget(4096)))
+
+        repeat(2) {
+            val body = JSONObject(server.takeRequest().body.readUtf8())
+            assertFalse(body.has("reasoning_effort"))
+            assertFalse(body.has("reasoning"))
+        }
     }
 
     @Test

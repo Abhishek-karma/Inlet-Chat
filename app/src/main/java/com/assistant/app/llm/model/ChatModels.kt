@@ -33,11 +33,16 @@ data class ChatRequest(
     val model: String,
     val messages: List<Pair<Role, String>>,
     /**
- * Data-URL images attached to the final user message;
- * empty for text-only requests. The wire format for that message becomes
- * the standard multi-content array, others stay plain strings.
+     * Data-URL images attached to the final user message;
+     * empty for text-only requests. The wire format for that message becomes
+     * the standard multi-content array, others stay plain strings.
      */
     val images: List<String> = emptyList(),
+    /**
+     * Reasoning selection for this generation; null sends no reasoning
+     * parameter. Providers translate it to their own wire format.
+     */
+    val reasoning: ReasoningConfig? = null,
 )
 
 /**

@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.TextSize
+import com.assistant.app.llm.model.ReasoningConfig
+import com.assistant.app.llm.model.ReasoningEffort
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -67,6 +69,22 @@ class AppPreferencesTest {
 
         preferences.setReasoningVisible(true)
         assertEquals(true, preferences.reasoningVisible.firstBounded())
+    }
+
+    @Test
+    fun `think selection round-trips per model and defaults to null`() = runTest {
+        assertNull(preferences.thinkSelection("gemini-2.5-flash"))
+
+        preferences.setThinkSelection("gemini-2.5-flash", ReasoningConfig.Budget(4096))
+        preferences.setThinkSelection("o3-mini", ReasoningConfig.Effort(ReasoningEffort.HIGH))
+        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection("gemini-2.5-flash"))
+        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), preferences.thinkSelection("o3-mini"))
+
+        // Keys are normalized, so a differently-cased model id reads the same entry.
+        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection("  Gemini-2.5-Flash "))
+
+        // Models without a stored selection stay null.
+        assertNull(preferences.thinkSelection("llama3.1:8b"))
     }
 
     @Test

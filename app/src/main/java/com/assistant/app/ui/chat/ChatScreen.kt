@@ -396,6 +396,9 @@ fun ChatScreen(
                 onAttachClick = { showAttachSheet = true },
                 searchActive = state.searchEnabled,
                 onToggleSearch = viewModel::toggleSearch,
+                thinkCapability = state.thinkCapability,
+                thinkConfig = state.thinkConfig,
+                onThinkSelect = viewModel::setThinkConfig,
                 topPadding = if (suggestions.isNotEmpty()) AppSpacing.xxs else AppSpacing.sm,
             )
         }

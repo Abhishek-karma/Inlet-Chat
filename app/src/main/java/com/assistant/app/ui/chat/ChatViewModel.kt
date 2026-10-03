@@ -11,6 +11,7 @@ import com.assistant.app.data.ChatStatus
 import com.assistant.app.data.ChatUiState
 import com.assistant.app.data.local.ConversationEntity
 import com.assistant.app.data.local.ProviderEntity
+import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.voice.VoiceInput
 import com.assistant.app.ui.history.ConversationSummary
 import com.assistant.app.voice.VoiceOutput
@@ -92,7 +93,10 @@ class ChatViewModel(
         viewModelScope.launch {
             chatLlm.collect { state ->
                 when (state) {
-                    is ChatLlmState.Ready -> repository.setNeedsSetup(false)
+                    is ChatLlmState.Ready -> {
+                        repository.setNeedsSetup(false)
+                        repository.onThinkModelChanged(state.model, state.thinkCapability)
+                    }
                     is ChatLlmState.NeedsSetup -> repository.setNeedsSetup(true)
                     is ChatLlmState.Loading -> Unit
                 }
@@ -191,6 +195,10 @@ class ChatViewModel(
         viewModelScope.launch {
             repository.setSearchEnabled(!repository.uiState.value.searchEnabled)
         }
+    }
+
+    fun setThinkConfig(config: ReasoningConfig) {
+        viewModelScope.launch { repository.setThinkConfig(config) }
     }
 
     fun dismissSearchNotice() {

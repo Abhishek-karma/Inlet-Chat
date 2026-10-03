@@ -3,6 +3,7 @@ package com.assistant.app.llm
 import com.assistant.app.llm.model.ChatChunk
 import com.assistant.app.llm.model.ChatRequest
 import com.assistant.app.llm.model.ProviderError
+import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.Role
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -386,6 +387,22 @@ class GeminiProvider(
 
         payload.put("contents", contents)
 
+        // Reasoning control: a thinking budget, an explicit off, or (Gemini 3)
+        // a thinking level. Auto/null sends nothing, keeping provider defaults.
+        val thinkingConfig = JSONObject()
+        when (val reasoning = request.reasoning) {
+            ReasoningConfig.Off -> thinkingConfig.put("thinkingBudget", 0)
+            is ReasoningConfig.Budget -> thinkingConfig.put(
+                "thinkingBudget",
+                reasoning.tokens.coerceIn(MIN_THINKING_BUDGET, MAX_THINKING_BUDGET),
+            )
+            is ReasoningConfig.Effort -> thinkingConfig.put("thinkingLevel", reasoning.level.name.lowercase())
+            else -> Unit
+        }
+        if (thinkingConfig.length() > 0) {
+            payload.put("generationConfig", JSONObject().put("thinkingConfig", thinkingConfig))
+        }
+
         val effectiveModel = request.model.ifBlank { model }.trim().removePrefix("models/")
         val rawBase = baseUrl.trim().trimEnd('/')
         val base = when {
@@ -414,6 +431,8 @@ class GeminiProvider(
         const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
         private const val MAX_ERROR_BODY_BYTES = 64L * 1024
         private const val MAX_LINE_BYTES = 64L * 1024
+        private const val MIN_THINKING_BUDGET = 1
+        private const val MAX_THINKING_BUDGET = 32768
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
