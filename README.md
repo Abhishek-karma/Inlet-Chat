@@ -17,12 +17,12 @@ L0 communicates directly from the Android device to the configured AI provider e
 - **Answer versions**: Regenerating an answer preserves previous variations, switchable on the message card.
 - **Follow-up suggestions**: Contextual follow-up suggestions generated automatically after answers (with natural-language refusal and error detection). Tapping a suggestion stages it in the composer for review without auto-sending.
 - **AI providers**:
-  - Saved provider profiles with quick-switching in the top bar.
+  - Saved provider profiles, each holding multiple saved models; the active model is switched from the navigation drawer.
   - Built-in presets for Google Gemini, OpenAI, OpenRouter, Groq, and Naga.
   - Custom OpenAI-compatible endpoints with models listing (`/models`) and connection testing.
   - Local/self-hosted LLM support (such as Ollama, LM Studio, or local servers reachable via `localhost`, `10.0.2.2`, or `.local`, `.lan`, `.home`, `.internal` private domains).
   - Collapsible model reasoning visualization for reasoning/thinking models.
-  - Think control in the composer for reasoning settings. Capability is declared per provider profile in settings (levels or a thinking budget); profiles left undeclared never receive reasoning parameters.
+  - Think control in the composer for reasoning settings. Capability is detected from the selected model's id (Gemini models get a thinking budget, known reasoning models get effort levels); every other model never receives reasoning parameters.
 - **Web search grounding**: Optional DuckDuckGo web search integration toggled per conversation, with cited web sources displayed alongside answers.
 - **Multimodal attachments**:
   - Image attachments (camera capture or gallery pick): automatic downscaling (max dimension 1280px) and JPEG compression.

@@ -11,6 +11,7 @@ import com.assistant.app.data.FollowUpSuggestions
 import com.assistant.app.data.LlmProviderCoordinator
 import com.assistant.app.data.ProviderStore
 import com.assistant.app.data.local.ChatDatabase
+import com.assistant.app.data.local.ProviderModelEntity
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.EncryptedSecureKeyStore
@@ -36,8 +37,11 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -79,6 +83,8 @@ class AppContainer(context: Context) {
                 ChatDatabase.MIGRATION_5_6,
                 ChatDatabase.MIGRATION_6_7,
                 ChatDatabase.MIGRATION_7_8,
+                ChatDatabase.MIGRATION_8_9,
+                ChatDatabase.MIGRATION_9_10,
             )
             .build()
     }
@@ -112,8 +118,12 @@ class AppContainer(context: Context) {
             followUpSuggestions = { provider, model, question, answer ->
                 FollowUpSuggestions.generate(provider, model, question, answer)
             },
-            loadThinkSelection = { model -> appPreferences.thinkSelection(model) },
-            saveThinkSelection = { model, config -> appPreferences.setThinkSelection(model, config) },
+            loadThinkSelection = { providerId, modelId ->
+                appPreferences.thinkSelection(providerId, modelId)
+            },
+            saveThinkSelection = { providerId, modelId, config ->
+                appPreferences.setThinkSelection(providerId, modelId, config)
+            },
             attachmentsDir = attachmentIngester.attachmentsDir,
             webSearch = { query ->
                 val client = httpClient
@@ -136,14 +146,26 @@ class AppContainer(context: Context) {
         val voiceIdState = appPreferences.voiceId.stateIn(appScope, SharingStarted.Eagerly, null)
         val reasoningVisibleState = appPreferences.reasoningVisible.stateIn(appScope, SharingStarted.Eagerly, true)
 
+        val savedModels: Flow<List<ProviderModelEntity>> = chatLlm.flatMapLatest { ready ->
+            if (ready is ChatLlmState.Ready) {
+                providerStore.models(ready.providerId)
+            } else {
+                flowOf(emptyList())
+            }
+        }
         return ChatViewModel.Factory(
             repository = chatRepository,
             chatLlm = chatLlm,
             voiceInput = voiceInput,
             voiceOutput = voiceOutput,
             isVoiceOutputEnabled = { voiceOutputState.value },
-            providers = providerStore.providers(),
-            activateProviderById = { id -> providerStore.setActive(id) },
+            savedModels = savedModels,
+            activateModelById = { modelId ->
+                providerStore.model(modelId)?.let { model ->
+                    providerStore.setActiveModel(model.providerId, modelId)
+                    providerStore.setActive(model.providerId)
+                }
+            },
             attachmentIngester = attachmentIngester,
             reasoningVisible = reasoningVisibleState,
             voiceAutoPlay = { voiceAutoPlayState.value },

@@ -33,6 +33,7 @@ import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.ui.chat.ChatScreen
 import com.assistant.app.ui.chat.ChatViewModel
 import com.assistant.app.ui.components.AppDrawer
+import com.assistant.app.ui.components.ChatModelOption
 import com.assistant.app.ui.history.ConversationSummary
 import com.assistant.app.ui.history.HistoryScreen
 import com.assistant.app.ui.history.SearchScreen
@@ -134,10 +135,16 @@ fun AssistantNavHost(
         ) { entry ->
             val chatLlm by chatViewModel.chatLlm.collectAsState()
             val chatState by chatViewModel.uiState.collectAsState()
-            val activeModel = (chatLlm as? ChatLlmState.Ready)?.model
+            val savedModels by chatViewModel.savedModels.collectAsState()
+            val ready = chatLlm as? ChatLlmState.Ready
             AppDrawer(
                 drawerState = drawerState,
-                activeModel = activeModel,
+                activeModel = ready?.model,
+                savedModels = savedModels.map {
+                    ChatModelOption(id = it.id, model = it.model, providerName = ready?.name.orEmpty())
+                },
+                activeModelId = ready?.modelId,
+                onModelSelected = chatViewModel::activateModel,
                 isNewChat = entry.arguments?.getString(CONVERSATION_ID_ARG) == null &&
                     chatState.conversationId == null,
                 onNewChat = {

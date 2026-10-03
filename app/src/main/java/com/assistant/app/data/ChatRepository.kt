@@ -49,8 +49,8 @@ class ChatRepository(
     private val generationDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val store: ConversationStore? = null,
     private val followUpSuggestions: (suspend (LlmProvider, String, String, String) -> List<String>)? = null,
-    private val loadThinkSelection: suspend (String) -> ReasoningConfig? = { null },
-    private val saveThinkSelection: (suspend (String, ReasoningConfig) -> Unit)? = null,
+    private val loadThinkSelection: suspend (Long, Long) -> ReasoningConfig? = { _, _ -> null },
+    private val saveThinkSelection: (suspend (Long, Long, ReasoningConfig) -> Unit)? = null,
     private val clock: () -> Long = System::currentTimeMillis,
     internal val attachmentsDir: File? = null,
     webSearch: (suspend (String) -> SearchOutcome?)? = null,
@@ -91,23 +91,25 @@ class ChatRepository(
 
     /**
      * Applies the Think capability of the newly active model: restores the
-     * persisted selection for it (clamped to what the model supports) or falls
-     * back to Auto. Called when the active provider changes; never during an
-     * active generation, and it never touches a request already in flight.
+     * persisted selection for that provider+model (clamped to what the model
+     * supports) or falls back to Auto. Called when the active provider or
+     * model changes; it never touches a request already in flight.
      */
-    suspend fun onThinkModelChanged(model: String, capability: ThinkCapability) {
-        val restored = loadThinkSelection(model)?.let { capability.normalize(it) } ?: ReasoningConfig.Auto
+    suspend fun onThinkModelChanged(providerId: Long, modelId: Long, capability: ThinkCapability) {
+        val restored = loadThinkSelection(providerId, modelId)
+            ?.let { capability.normalize(it) }
+            ?: ReasoningConfig.Auto
         _uiState.update { it.copy(thinkCapability = capability, thinkConfig = restored) }
     }
 
-    /** Updates the Think selection and persists it for the active model. */
+    /** Updates the Think selection and persists it for the active provider+model. */
     suspend fun setThinkConfig(config: ReasoningConfig) {
         val capability = _uiState.value.thinkCapability
         if (!capability.isReasoningSupported()) return
-        val model = (chatLlm.value as? ChatLlmState.Ready)?.model ?: return
+        val ready = chatLlm.value as? ChatLlmState.Ready ?: return
         val normalized = capability.normalize(config)
         _uiState.update { it.copy(thinkConfig = normalized) }
-        saveThinkSelection?.invoke(model, normalized)
+        saveThinkSelection?.invoke(ready.providerId, ready.modelId, normalized)
     }
 
     fun setNeedsSetup(needsSetup: Boolean) {
@@ -549,8 +551,7 @@ class ChatRepository(
         _uiState.update { it.copy(status = ChatStatus.Generating) }
 
         // Captured once here: changing the Think control while this response
-        // streams cannot alter the request already being built below. A profile
-        // without declared reasoning support (or unknown) sends no parameter.
+        // streams cannot alter the request already being built below.
         val reasoning = when {
             !llm.thinkCapability.isReasoningSupported() -> null
             _uiState.value.thinkConfig is ReasoningConfig.Auto -> null

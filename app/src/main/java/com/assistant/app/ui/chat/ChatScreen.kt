@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,13 +69,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -100,6 +106,7 @@ import com.assistant.app.ui.theme.AppMotion
 import com.assistant.app.ui.theme.AppSpacing
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.appTween
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -122,12 +129,12 @@ fun ChatScreen(
     val viewModel: ChatViewModel = viewModel(factory = viewModelFactory)
     val state by viewModel.uiState.collectAsState()
     val chatLlmState by viewModel.chatLlm.collectAsState()
-    val savedProviders by viewModel.savedProviders.collectAsState()
     val reasoningVisible by viewModel.reasoningVisible.collectAsState()
     var editingMessageId by remember { mutableStateOf<String?>(null) }
     var showMicRationale by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -251,14 +258,6 @@ fun ChatScreen(
         .orEmpty()
     val composerHint: () -> String? = {
         when {
-            state.voiceStatus == VoiceStatus.Listening ->
-                context.getString(R.string.voice_listening_hint)
-            state.voiceStatus == VoiceStatus.Processing ->
-                context.getString(R.string.voice_processing_hint)
-            state.voiceStatus == VoiceStatus.Speaking ->
-                context.getString(R.string.voice_speaking_hint)
-            state.voiceStatus == VoiceStatus.Error ->
-                context.getString(R.string.voice_error_hint)
             showMicRationale -> context.getString(R.string.voice_mic_rationale)
             state.voiceHint -> context.getString(R.string.voice_no_match_hint)
             else -> state.searchNotice
@@ -266,18 +265,39 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
-    val atBottom = listState.firstVisibleItemIndex == 0 &&
-        listState.firstVisibleItemScrollOffset == 0
+    val listScope = rememberCoroutineScope()
+    val followThresholdPx = with(LocalDensity.current) { FOLLOW_THRESHOLD.toPx() }
+
+    // Auto-follow yields to the user: only a deliberate scroll beyond the
+    // threshold hands control back, and returning near the bottom takes it again.
+    var followLatest by remember { mutableStateOf(true) }
+    LaunchedEffect(listState, followThresholdPx) {
+        snapshotFlow { listState.isNearBottom(followThresholdPx) }
+            .distinctUntilChanged()
+            .collect { nearBottom -> followLatest = nearBottom }
+    }
     val lastMessage = state.messages.lastOrNull()
     LaunchedEffect(lastMessage?.id, lastMessage?.content?.length) {
-        val atBottom = listState.firstVisibleItemIndex == 0 &&
-            listState.firstVisibleItemScrollOffset == 0
-        if (!atBottom) return@LaunchedEffect
+        if (!followLatest) return@LaunchedEffect
+        // Streaming tracks the newest tokens with an instant jump: animating
+        // every token would jitter, and the growing message already keeps the
+        // viewport on the latest content.
         if (isGenerating) {
             listState.scrollToItem(0)
         } else {
             listState.animateScrollToItem(0)
         }
+    }
+
+    // The keyboard steps aside for the conversation: on send, when the reply
+    // lands, and whenever the user scrolls or taps the messages. It is left
+    // alone if they are already typing the next message.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling -> if (scrolling) keyboard?.hide() }
+    }
+    LaunchedEffect(isGenerating) {
+        if (!isGenerating && state.draft.isBlank()) keyboard?.hide()
     }
 
     @OptIn(ExperimentalLayoutApi::class)
@@ -396,6 +416,13 @@ fun ChatScreen(
                         viewModel.send(state.draft)
                     }
                     editingMessageId = null
+                    // Scroll first, then claim following: setting the flag up front
+                    // can be undone by the scroll observer before the move lands.
+                    listScope.launch {
+                        listState.scrollToItem(0)
+                        followLatest = true
+                    }
+                    keyboard?.hide()
                 },
                 onStop = viewModel::stop,
                 isGenerating = isGenerating,
@@ -423,17 +450,12 @@ fun ChatScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            val activeProvider = (chatLlmState as? ChatLlmState.Ready)
-                ?.let { ready -> savedProviders.firstOrNull { it.id == ready.providerId } }
             val voiceOut by viewModel.voiceOutputEnabled.collectAsState()
             AssistantTopBar(
                 title = stringResource(R.string.app_name),
                 onOpenDrawer = onOpenDrawer,
                 onToggleVoiceOutput = if (viewModel.ttsAvailable) viewModel::toggleVoiceOutput else null,
                 voiceOutputEnabled = voiceOut,
-                activeProvider = activeProvider,
-                savedProviders = savedProviders,
-                onProviderSelected = viewModel::activateProvider,
                 scrollBehavior = topBarBehavior,
             )
         },
@@ -489,7 +511,13 @@ fun ChatScreen(
                     }
 
                     else -> Column(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .pointerInput(Unit) {
+                                    detectTapGestures { keyboard?.hide() }
+                                },
+                        ) {
                             MessageList(
                                 messages = state.messages,
                                 status = state.status,
@@ -506,7 +534,7 @@ fun ChatScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             )
 
-                            val showScrollAffordance = isGenerating && !atBottom
+                            val showScrollAffordance = !followLatest
                             val fabAlpha by animateFloatAsState(
                                 targetValue = if (showScrollAffordance) 1f else 0f,
                                 animationSpec = appTween(AppMotion.FAST),
@@ -514,9 +542,11 @@ fun ChatScreen(
                             )
                             if (fabAlpha > 0.01f) {
                                 val scrollLabel = stringResource(R.string.cd_scroll_to_latest)
-                                val listScope = rememberCoroutineScope()
                                 Surface(
-                                    onClick = { listScope.launch { listState.animateScrollToItem(0) } },
+                                    onClick = {
+                                        followLatest = true
+                                        listScope.launch { listState.animateScrollToItem(0) }
+                                    },
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
@@ -600,3 +630,9 @@ fun ChatScreen(
         }
     }
 }
+
+/** Pinned within [thresholdPx] of the newest item counts as still following. */
+internal fun LazyListState.isNearBottom(thresholdPx: Float): Boolean =
+    firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset <= thresholdPx
+
+private val FOLLOW_THRESHOLD = 100.dp

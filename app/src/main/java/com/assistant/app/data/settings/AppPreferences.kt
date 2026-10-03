@@ -148,21 +148,24 @@ class AppPreferences(
     }
 
     /**
-     * The saved Think selection for [model], or null when none was stored.
-     * One key per model, so switching models keeps each preference intact.
+     * The saved Think selection for one model of one provider, or null when
+     * none was stored. Keyed by provider and model ids, so the same model name
+     * under two providers keeps separate Think state.
      */
-    suspend fun thinkSelection(model: String): ReasoningConfig? {
+    suspend fun thinkSelection(providerId: Long, modelId: Long): ReasoningConfig? {
         val prefs = dataStore.data.first()
-        return prefs[stringPreferencesKey(THINK_KEY_PREFIX + model.trim().lowercase())]
-            ?.let { decodeReasoningConfig(it) }
+        return prefs[stringPreferencesKey(thinkKey(providerId, modelId))]?.let { decodeReasoningConfig(it) }
     }
 
-    /** Persists the Think selection for [model]. */
-    suspend fun setThinkSelection(model: String, config: ReasoningConfig) {
+    /** Persists the Think selection for one model of one provider. */
+    suspend fun setThinkSelection(providerId: Long, modelId: Long, config: ReasoningConfig) {
         dataStore.edit { prefs ->
-            prefs[stringPreferencesKey(THINK_KEY_PREFIX + model.trim().lowercase())] = config.encode()
+            prefs[stringPreferencesKey(thinkKey(providerId, modelId))] = config.encode()
         }
     }
+
+    private fun thinkKey(providerId: Long, modelId: Long): String =
+        THINK_KEY_PREFIX + providerId + "_" + modelId
 
     /** Timestamp of the last update check in milliseconds. */
     val lastUpdateCheckTime: Flow<Long> = dataStore.data.map { prefs -> prefs[KEY_LAST_UPDATE_CHECK_TIME] ?: 0L }

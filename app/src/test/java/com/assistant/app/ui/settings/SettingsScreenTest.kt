@@ -19,6 +19,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.assistant.app.R
+import com.assistant.app.data.ModelDraft
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
 import com.assistant.app.data.settings.AppPreferences
@@ -71,8 +72,9 @@ class SettingsScreenTest {
         if (seedKey != null) {
             runBlocking {
                 providerStore.addProvider(
-                    ProviderDraft(name = "P", baseUrl = "https://api.example.com", model = "m"),
+                    ProviderDraft(name = "P", baseUrl = "https://api.example.com"),
                     seedKey,
+                    listOf(ModelDraft(model = "m", isActive = true)),
                 )
             }
         }
@@ -360,12 +362,14 @@ class SettingsScreenTest {
         setContent()
         runBlocking {
             providerStore.addProvider(
-                ProviderDraft(name = "First", baseUrl = "https://a.example/v1", model = "m1"),
+                ProviderDraft(name = "First", baseUrl = "https://a.example/v1"),
                 "sk-1",
+                listOf(ModelDraft(model = "m1", isActive = true)),
             )
             providerStore.addProvider(
-                ProviderDraft(name = "Second", baseUrl = "https://b.example/v1", model = "m2"),
+                ProviderDraft(name = "Second", baseUrl = "https://b.example/v1"),
                 "sk-2",
+                listOf(ModelDraft(model = "m2", isActive = true)),
             )
         }
         openPage(context.getString(R.string.settings_section_provider))
@@ -376,6 +380,60 @@ class SettingsScreenTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.settings_provider_inactive))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun providerTypeMenuFillsEndpointFromTheChosenPreset() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_provider))
+        composeRule.onNodeWithText(context.getString(R.string.settings_add_provider)).performClick()
+        awaitEditorOpen()
+
+        // The type menu is built from the shipped presets plus the custom entry.
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(context.getString(R.string.settings_provider_label)))
+        composeRule.onNodeWithTag(SettingsProviderFieldTag).performClick()
+        composeRule.onNodeWithText("OpenAI").assertIsDisplayed()
+        // The custom entry appears in the open menu beside the field's own label.
+        assertTrue(
+            "Custom entry should be listed in the open menu",
+            composeRule
+                .onAllNodesWithText(context.getString(R.string.settings_provider_custom))
+                .fetchSemanticsNodes()
+                .size == 2,
+        )
+
+        // Choosing a preset fills the endpoint it stands for.
+        composeRule.onNodeWithText("OpenAI").performClick()
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText("https://api.openai.com/v1"))
+        composeRule.onNodeWithText("https://api.openai.com/v1").assertIsDisplayed()
+    }
+
+    @Test
+    fun modelPickerCommitsATypedModelWithOneTap() {
+        setContent()
+        openPage(context.getString(R.string.settings_section_provider))
+        composeRule.onNodeWithText(context.getString(R.string.settings_add_provider)).performClick()
+        awaitEditorOpen()
+
+        composeRule.onNode(hasScrollAction())
+            .performScrollToNode(hasText(context.getString(R.string.model_selector_title)))
+        composeRule.onNodeWithText(context.getString(R.string.model_selector_title)).performClick()
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag(ModelSelectorSearchTag).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // The search field doubles as free text for endpoints that serve no list.
+        composeRule.onNodeWithTag(ModelSelectorSearchTag).performTextInput("typed-model")
+
+        // One tap commits and closes; there is no confirm step anymore.
+        composeRule.onNodeWithTag(ModelSelectorRowTag).performClick()
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithText(context.getString(R.string.model_selector_title))
+                .fetchSemanticsNodes().size == 1
+        }
+        composeRule.onNodeWithText("typed-model").assertIsDisplayed()
     }
 
     @Test

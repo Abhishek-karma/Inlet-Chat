@@ -1,10 +1,9 @@
 package com.assistant.app.ui.settings
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -38,6 +39,9 @@ import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.theme.AppShape
 import com.assistant.app.ui.theme.AppSpacing
 
+internal const val ModelSelectorSearchTag = "model_selector_search_field"
+internal const val ModelSelectorRowTag = "model_selector_row"
+
 /**
  * The models the edited provider reported, filtered by a search box, plus the
  * typed value for anything not listed. The list comes from the provider's own
@@ -46,6 +50,8 @@ import com.assistant.app.ui.theme.AppSpacing
  *
  * A bottom sheet, like the other full-width overlays: the list can be long, and
  * a sheet keeps every row thumb-reachable instead of trapping it in a dialog.
+ * A tap commits and closes, matching the chat's own switcher, so choosing takes
+ * one gesture and dismissing the sheet leaves the model untouched.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +65,6 @@ fun ModelSelectorDialog(
     onRetry: (() -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
-    var selected by remember(currentModel) { mutableStateOf(currentModel) }
     val matches = remember(query, availableModels) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
@@ -67,6 +72,10 @@ fun ModelSelectorDialog(
         } else {
             availableModels.filter { it.contains(trimmed, ignoreCase = true) }
         }
+    }
+    val commit: (String) -> Unit = {
+        onSelect(it)
+        onDismiss()
     }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -86,10 +95,12 @@ fun ModelSelectorDialog(
                 placeholder = { Text(stringResource(R.string.model_selector_search)) },
                 singleLine = true,
                 shape = AppShape.medium,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(ModelSelectorSearchTag),
             )
-            when {
-                isLoading -> Box(
+            if (isLoading) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(96.dp),
@@ -100,48 +111,51 @@ fun ModelSelectorDialog(
                         strokeWidth = 2.dp,
                     )
                 }
-
-                loadFailed -> Column(
-                    modifier = Modifier.padding(vertical = AppSpacing.md),
-                ) {
-                    Text(
-                        text = stringResource(R.string.model_selector_unavailable),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    onRetry?.let { retry ->
-                        TextButton(
-                            onClick = retry,
-                            modifier = Modifier.padding(top = AppSpacing.xs),
-                        ) {
-                            Text(stringResource(R.string.model_selector_retry))
-                        }
-                    }
-                }
-
-                else -> LazyColumn(
+            } else {
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 360.dp)
                         .padding(top = AppSpacing.sm),
                 ) {
-                    if (query.isNotBlank()) {
+                    val typed = query.trim()
+                    if (typed.isNotEmpty()) {
                         item(key = "typed") {
                             ModelRow(
-                                label = query.trim(),
-                                selected = selected == query.trim(),
-                                onClick = { selected = query.trim() },
+                                label = typed,
+                                selected = typed == currentModel,
+                                onClick = { commit(typed) },
                             )
                         }
                     }
                     items(matches, key = { it }) { model ->
                         ModelRow(
                             label = model,
-                            selected = selected == model,
-                            onClick = { selected = model },
+                            selected = model == currentModel,
+                            onClick = { commit(model) },
                         )
                     }
-                    if (matches.isEmpty()) {
+                    if (loadFailed) {
+                        item(key = "error") {
+                            Column(
+                                modifier = Modifier.padding(vertical = AppSpacing.md),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.model_selector_unavailable),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                onRetry?.let { retry ->
+                                    TextButton(
+                                        onClick = retry,
+                                        modifier = Modifier.padding(top = AppSpacing.xs),
+                                    ) {
+                                        Text(stringResource(R.string.model_selector_retry))
+                                    }
+                                }
+                            }
+                        }
+                    } else if (matches.isEmpty()) {
                         item(key = "empty") {
                             Text(
                                 text = stringResource(R.string.model_selector_no_match),
@@ -153,25 +167,7 @@ fun ModelSelectorDialog(
                     }
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = AppSpacing.sm, bottom = AppSpacing.md),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.settings_cancel))
-                }
-                TextButton(
-                    onClick = {
-                        if (selected.isNotBlank()) onSelect(selected)
-                        onDismiss()
-                    },
-                    enabled = selected.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.settings_save))
-                }
-            }
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
         }
     }
 }
@@ -188,11 +184,12 @@ private fun ModelRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(AppShape.medium)
-            .clickable(
-                onClickLabel = stringResource(R.string.model_selector_title),
-                role = Role.Button,
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
                 onClick = onClick,
             )
+            .testTag(ModelSelectorRowTag)
             .heightIn(min = 48.dp)
             .padding(horizontal = AppSpacing.md, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

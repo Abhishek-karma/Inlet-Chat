@@ -1,7 +1,5 @@
 package com.assistant.app.llm
 
-import com.assistant.app.data.toThinkCapability
-import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.ThinkCapability
@@ -9,6 +7,7 @@ import com.assistant.app.llm.model.accepts
 import com.assistant.app.llm.model.budgetPresets
 import com.assistant.app.llm.model.decodeReasoningConfig
 import com.assistant.app.llm.model.encode
+import com.assistant.app.llm.model.inferThinkCapability
 import com.assistant.app.llm.model.isReasoningSupported
 import com.assistant.app.llm.model.normalize
 import org.junit.Assert.assertEquals
@@ -17,38 +16,32 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * Capability model and provider declaration mapping. Capability is a property
- * of the configured provider profile — there is deliberately no model-name
- * matching anywhere in this system.
- */
+/** Capability detection from the selected model's id, and the selection model. */
 class ReasoningCapabilityTest {
 
     @Test
-    fun `unspecified declaration maps to unknown capability`() {
-        val capability = ReasoningSupport.UNSPECIFIED.toThinkCapability()
-        assertEquals(ThinkCapability.Unknown, capability)
-        assertFalse(capability.isReasoningSupported())
-    }
-
-    @Test
-    fun `effort declaration maps to low medium high`() {
-        val capability = ReasoningSupport.EFFORT.toThinkCapability()
-        assertEquals(
-            ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH)),
-            capability,
-        )
-        assertTrue(capability.isReasoningSupported())
-    }
-
-    @Test
-    fun `budget declaration maps to a bounded budget`() {
-        val capability = ReasoningSupport.BUDGET.toThinkCapability()
+    fun `gemini model ids are detected as budget reasoning models`() {
         assertEquals(
             ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
-            capability,
+            inferThinkCapability("gemini-2.5-flash"),
         )
-        assertTrue(capability.isReasoningSupported())
+        assertTrue(inferThinkCapability("gemini-3-pro-preview").isReasoningSupported())
+    }
+
+    @Test
+    fun `known reasoning model ids are detected as effort models`() {
+        listOf("o3", "o3-mini", "deepseek-r1", "grok-3-thinking", "qwen3-reasoner").forEach { id ->
+            assertEquals(ThinkCapability.Effort(ReasoningEffort.entries), inferThinkCapability(id))
+            assertTrue(inferThinkCapability(id).isReasoningSupported())
+        }
+    }
+
+    @Test
+    fun `plain model ids stay unknown`() {
+        listOf("gpt-4o", "gpt-4o-mini", "llama3.1:8b", "phi-4", "mistral-small", "foo").forEach { id ->
+            assertEquals(ThinkCapability.Unknown, inferThinkCapability(id))
+            assertFalse(inferThinkCapability(id).isReasoningSupported())
+        }
     }
 
     @Test

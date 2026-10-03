@@ -3,6 +3,7 @@ package com.assistant.app
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.assistant.app.data.ModelDraft
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
 import com.assistant.app.data.local.ChatDatabase
@@ -110,14 +111,14 @@ class SettingsViewModelTest {
         startAdd()
         setName("OpenAI")
         setBaseUrl("https://api.openai.com/v1")
-        setModel("gpt-4o-mini")
+        setModelAt(0, "gpt-4o-mini")
         setApiKeyInput("sk-typed")
     }
 
     @Test
     fun `provider list hydrates with active flag`() = runSettingsTest(
         seed = { store, _ ->
-            val id = store.addProvider(ProviderDraft("P", "https://a.com/v1", "m"), "sk-stored")
+            val id = store.addProvider(ProviderDraft("P", "https://a.com/v1"), "sk-stored", listOf(ModelDraft(model = "m", isActive = true)))
             store.setActive(id)
         },
     ) { viewModel, _, _, _ ->
@@ -126,7 +127,7 @@ class SettingsViewModelTest {
         val providers = viewModel.uiState.value.providers
         assertEquals(1, providers.size)
         assertEquals("P", providers.single().name)
-        assertEquals("m", providers.single().model)
+        assertEquals("m", providers.single().activeModel)
         assertTrue(providers.single().isActive)
         assertFalse(viewModel.uiState.value.isEditing)
     }
@@ -143,7 +144,7 @@ class SettingsViewModelTest {
         viewModel.setBaseUrl("https://api.openai.com/v1")
         viewModel.uiState.first { it.formError == ProviderStore.ERROR_MODEL_REQUIRED }
 
-        viewModel.setModel("gpt-4o-mini")
+        viewModel.setModelAt(0, "gpt-4o-mini")
         viewModel.uiState.first { it.formError == ProviderStore.ERROR_API_KEY_REQUIRED }
 
         viewModel.setApiKeyInput("sk-1")
@@ -166,7 +167,7 @@ class SettingsViewModelTest {
     @Test
     fun `edit keeps stored key when key field left empty`() = runSettingsTest(
         seed = { store, _ ->
-            store.addProvider(ProviderDraft("P", "https://a.com/v1", "m"), "sk-stored")
+            store.addProvider(ProviderDraft("P", "https://a.com/v1"), "sk-stored", listOf(ModelDraft(model = "m", isActive = true)))
         },
     ) { viewModel, store, _, _ ->
         awaitSettled(viewModel)
@@ -196,7 +197,7 @@ class SettingsViewModelTest {
     @Test
     fun `delete removes the provider and closes the editor`() = runSettingsTest(
         seed = { store, _ ->
-            store.addProvider(ProviderDraft("P", "https://a.com/v1", "m"), "sk-stored")
+            store.addProvider(ProviderDraft("P", "https://a.com/v1"), "sk-stored", listOf(ModelDraft(model = "m", isActive = true)))
         },
     ) { viewModel, store, _, _ ->
         awaitSettled(viewModel)
@@ -213,8 +214,8 @@ class SettingsViewModelTest {
     @Test
     fun `activation switches to exactly one active provider`() = runSettingsTest(
         seed = { store, _ ->
-            store.addProvider(ProviderDraft("First", "https://a.com/v1", "m1"), "sk-1")
-            store.addProvider(ProviderDraft("Second", "https://b.com/v1", "m2"), "sk-2")
+            store.addProvider(ProviderDraft("First", "https://a.com/v1"), "sk-1", listOf(ModelDraft(model = "m1", isActive = true)))
+            store.addProvider(ProviderDraft("Second", "https://b.com/v1"), "sk-2", listOf(ModelDraft(model = "m2", isActive = true)))
         },
     ) { viewModel, store, _, _ ->
         awaitSettled(viewModel)
@@ -231,7 +232,7 @@ class SettingsViewModelTest {
     @Test
     fun `connection test uses edited values and stored key fallback`() = runSettingsTest(
         seed = { store, _ ->
-            store.addProvider(ProviderDraft("P", "https://a.com/v1", "m"), "sk-stored")
+            store.addProvider(ProviderDraft("P", "https://a.com/v1"), "sk-stored", listOf(ModelDraft(model = "m", isActive = true)))
         },
     ) { viewModel, _, _, provider ->
         awaitSettled(viewModel)
@@ -240,7 +241,7 @@ class SettingsViewModelTest {
         viewModel.uiState.first { it.isEditing }
         viewModel.setName("New")
         viewModel.setBaseUrl("https://b.com/v1")
-        viewModel.setModel("new-model")
+        viewModel.setModelAt(0, "new-model")
         // Empty key field: the stored key satisfies validation and is used.
         viewModel.testConnection()
         viewModel.uiState.first { it.connectionOutcome == ConnectionOutcome.Success }
@@ -253,7 +254,7 @@ class SettingsViewModelTest {
     fun `connection test records failure outcome with actionable message`() = runSettingsTest(
         script = listOf(ScriptedEvent.Fail(ProviderError.InvalidCredentials, "API key was invalid")),
         seed = { store, _ ->
-            store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com", "gemini-3.6-flash"), "bad-key")
+            store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com"), "bad-key", listOf(ModelDraft(model = "gemini-3.6-flash", isActive = true)))
         },
     ) { viewModel, _, _, _ ->
         awaitSettled(viewModel)
@@ -433,15 +434,15 @@ class SettingsViewModelTest {
         assertEquals(1, providers.size)
         val gemini = providers.single()
         assertEquals("Gemini", gemini.name)
-        assertEquals("gemini-2.5-flash", gemini.model)
+        assertEquals("gemini-2.5-flash", gemini.activeModel)
         assertTrue(gemini.isActive)
     }
 
     @Test
     fun `switching active provider updates active flag and preserves models`() = runSettingsTest(
         seed = { store, _ ->
-            val p1 = store.addProvider(ProviderDraft("OpenAI", "https://api.openai.com/v1", "gpt-4o"), "sk-1")
-            val p2 = store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com", "gemini-2.5-flash"), "AIzaKey")
+            val p1 = store.addProvider(ProviderDraft("OpenAI", "https://api.openai.com/v1"), "sk-1", listOf(ModelDraft(model = "gpt-4o", isActive = true)))
+            val p2 = store.addProvider(ProviderDraft("Gemini", "https://generativelanguage.googleapis.com"), "AIzaKey", listOf(ModelDraft(model = "gemini-2.5-flash", isActive = true)))
             store.setActive(p1)
         },
     ) { viewModel, store, _, _ ->
@@ -458,8 +459,8 @@ class SettingsViewModelTest {
         val updated = viewModel.uiState.value.providers
         assertFalse(updated.first { it.name == "OpenAI" }.isActive)
         assertTrue(updated.first { it.name == "Gemini" }.isActive)
-        assertEquals("gpt-4o", updated.first { it.name == "OpenAI" }.model)
-        assertEquals("gemini-2.5-flash", updated.first { it.name == "Gemini" }.model)
+        assertEquals("gpt-4o", updated.first { it.name == "OpenAI" }.activeModel)
+        assertEquals("gemini-2.5-flash", updated.first { it.name == "Gemini" }.activeModel)
     }
 
     @Test

@@ -80,6 +80,29 @@ fun ThinkCapability.budgetPresets(): List<Int> = when (this) {
     else -> emptyList()
 }
 
+private const val GEMINI_BUDGET_MIN = 1
+private const val GEMINI_BUDGET_MAX = 32768
+
+/** Marks in a model id that mean the provider exposes discrete effort. */
+private val EFFORT_MARKERS = listOf("thinking", "reasoner", "reasoning")
+private val EFFORT_ID_PATTERN = Regex("""(?:^|[^a-z0-9])(?:o[1-9]|r1)(?:$|[^0-9])""")
+
+/** Capability detected from the selected model's id; unrecognised ids send nothing. */
+fun inferThinkCapability(model: String): ThinkCapability {
+    val id = model.lowercase()
+    return when {
+        "gemini" in id -> ThinkCapability.Budget(
+            minTokens = GEMINI_BUDGET_MIN,
+            maxTokens = GEMINI_BUDGET_MAX,
+            allowOff = true,
+            allowAuto = true,
+        )
+        EFFORT_MARKERS.any { it in id } || EFFORT_ID_PATTERN.containsMatchIn(id) ->
+            ThinkCapability.Effort(ReasoningEffort.entries)
+        else -> ThinkCapability.Unknown
+    }
+}
+
 /** Compact stable encoding for persistence; [decodeReasoningConfig] reverses it. */
 fun ReasoningConfig.encode(): String = when (this) {
     ReasoningConfig.Auto -> "auto"

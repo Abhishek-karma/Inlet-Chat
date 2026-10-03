@@ -54,7 +54,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
-import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.ui.components.AppIcons
 import com.assistant.app.ui.theme.AppCodeFontFamily
 import com.assistant.app.ui.theme.AppShape
@@ -63,8 +62,8 @@ import com.assistant.app.ui.theme.AppSpacing
 internal const val SettingsNameFieldTag = "settings_name_field"
 internal const val SettingsBaseUrlFieldTag = "settings_base_url_field"
 internal const val SettingsApiKeyFieldTag = "settings_api_key_field"
+internal const val SettingsProviderFieldTag = "settings_provider_field"
 internal const val SettingsModelFieldTag = "settings_model_field"
-internal const val SettingsReasoningFieldTag = "settings_reasoning_field"
 
 @Composable
 internal fun ProviderPage(
@@ -204,51 +203,38 @@ internal fun ProviderRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = provider.model.ifBlank {
-                    stringResource(R.string.settings_provider_no_model)
-                },
+                text = provider.activeModel?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.settings_provider_no_model),
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = AppCodeFontFamily),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (provider.isActive) {
-            Text(
-                text = stringResource(R.string.settings_provider_active),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = AppSpacing.xs),
+        Text(
+            text = stringResource(
+                if (provider.isActive) R.string.settings_provider_active else R.string.settings_provider_inactive,
+            ),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (provider.isActive) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color = if (provider.isActive) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(end = AppSpacing.xs),
+        )
+        IconButton(
+            onClick = onEdit,
+            modifier = Modifier.size(48.dp),
+        ) {
+            Icon(
+                painter = painterResource(AppIcons.ChevronRight),
+                contentDescription = stringResource(R.string.settings_edit_provider),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp),
             )
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    painter = painterResource(AppIcons.ChevronRight),
-                    contentDescription = stringResource(R.string.settings_edit_provider),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        } else {
-            Text(
-                text = stringResource(R.string.settings_provider_inactive),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = AppSpacing.xs),
-            )
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    painter = painterResource(AppIcons.ChevronRight),
-                    contentDescription = stringResource(R.string.settings_edit_provider),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(16.dp),
-                )
-            }
         }
     }
 }
@@ -263,24 +249,9 @@ internal fun ProviderEditor(
     val isGeminiProvider = isGemini(state.baseUrl, state.name)
     var providerDropdownExpanded by remember { mutableStateOf(false) }
 
-    val presetNames = listOf(
-        "Google Gemini",
-        "OpenAI",
-        "OpenRouter",
-        "Groq",
-        "Naga",
-        "OpenAI-compatible",
-    )
-
-    val currentProviderLabel = when {
-        isGeminiProvider -> "Google Gemini"
-        state.name.equals("OpenAI", ignoreCase = true) -> "OpenAI"
-        state.name.equals("OpenRouter", ignoreCase = true) -> "OpenRouter"
-        state.name.equals("Groq", ignoreCase = true) -> "Groq"
-        state.name.equals("Naga", ignoreCase = true) -> "Naga"
-        state.baseUrl.isNotBlank() && state.name.isNotBlank() -> state.name
-        else -> "OpenAI-compatible"
-    }
+    val selectedPreset = presetFor(state.baseUrl, state.name)
+    val currentProviderLabel = selectedPreset?.name
+        ?: stringResource(R.string.settings_provider_custom)
 
     Column(
         modifier = Modifier
@@ -302,72 +273,50 @@ internal fun ProviderEditor(
                 shape = AppShape.small,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor(),
+                    .menuAnchor()
+                    .testTag(SettingsProviderFieldTag),
                 enabled = !state.isSaving,
             )
             ExposedDropdownMenu(
                 expanded = providerDropdownExpanded,
                 onDismissRequest = { providerDropdownExpanded = false },
             ) {
-                presetNames.forEach { label ->
+                ProviderPresets.forEach { preset ->
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = label,
+                                text = preset.name,
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (label == currentProviderLabel) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (preset == selectedPreset) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
                         onClick = {
                             providerDropdownExpanded = false
-                            when (label) {
-                                "Google Gemini" -> {
-                                    viewModel.fillPreset(
-                                        name = GEMINI_NAME,
-                                        baseUrl = GEMINI_BASE_URL,
-                                        defaultModel = GEMINI_DEFAULT_MODEL,
-                                    )
-                                }
-                                "OpenAI" -> {
-                                    viewModel.fillPreset(
-                                        name = "OpenAI",
-                                        baseUrl = "https://api.openai.com/v1",
-                                        defaultModel = "gpt-4o-mini",
-                                    )
-                                }
-                                "OpenRouter" -> {
-                                    viewModel.fillPreset(
-                                        name = "OpenRouter",
-                                        baseUrl = "https://openrouter.ai/api/v1",
-                                        defaultModel = "openai/gpt-4o-mini",
-                                    )
-                                }
-                                "Groq" -> {
-                                    viewModel.fillPreset(
-                                        name = "Groq",
-                                        baseUrl = "https://api.groq.com/openai/v1",
-                                        defaultModel = "llama-3.3-70b-versatile",
-                                    )
-                                }
-                                "Naga" -> {
-                                    viewModel.fillPreset(
-                                        name = "Naga",
-                                        baseUrl = "https://api.naga.ac/v1",
-                                        defaultModel = "dots-3-note-preview:free",
-                                    )
-                                }
-                                else -> {
-                                    // Custom OpenAI-compatible
-                                    viewModel.fillPreset(
-                                        name = "",
-                                        baseUrl = "",
-                                        defaultModel = "",
-                                    )
-                                }
-                            }
+                            viewModel.fillPreset(
+                                name = preset.name,
+                                baseUrl = preset.baseUrl,
+                                defaultModel = preset.defaultModel,
+                            )
                         },
                     )
                 }
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.settings_provider_custom),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (selectedPreset == null) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    },
+                    onClick = {
+                        providerDropdownExpanded = false
+                        viewModel.fillPreset(
+                            name = "",
+                            baseUrl = "",
+                            defaultModel = "",
+                        )
+                    },
+                )
             }
         }
 
@@ -437,11 +386,7 @@ internal fun ProviderEditor(
         )
 
         // API Key helper link
-        val keyUrl = if (isGeminiProvider) {
-            GEMINI_KEY_URL
-        } else {
-            presetForBaseUrl(state.baseUrl)?.keyUrl
-        }
+        val keyUrl = selectedPreset?.keyUrl
         if (keyUrl != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -462,88 +407,49 @@ internal fun ProviderEditor(
             }
         }
 
-        // Model field
-        var modelSelectorOpen by remember { mutableStateOf(false) }
-        OutlinedTextField(
-            value = state.model,
-            onValueChange = viewModel::setModel,
-            label = { Text(stringResource(R.string.settings_field_model)) },
-            singleLine = true,
-            shape = AppShape.small,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(SettingsModelFieldTag),
-            enabled = !state.isSaving,
-            trailingIcon = {
-                TextButton(
-                    onClick = { modelSelectorOpen = true },
-                    enabled = !state.isSaving,
-                ) {
-                    Text(
-                        stringResource(R.string.model_selector_title),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            },
+        var modelSelectorFor by remember { mutableStateOf<Int?>(null) }
+        // Models section: many saved models, one active, each with its own
+        // explicitly declared reasoning capability.
+        Text(
+            text = stringResource(R.string.settings_models_title),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = AppSpacing.sm, bottom = AppSpacing.xs),
         )
+        state.models.forEachIndexed { index, draft ->
+            ModelEditorRow(
+                draft = draft,
+                modelCount = state.models.size,
+                enabled = !state.isSaving,
+                onOpenSelector = { modelSelectorFor = index },
+                onModelChange = { viewModel.setModelAt(index, it) },
+                onSetActive = { viewModel.setActiveModel(index) },
+                onRemove = { viewModel.removeModel(index) },
+            )
+        }
+        OutlinedButton(
+            onClick = viewModel::addModel,
+            enabled = !state.isSaving,
+            shape = AppShape.pill,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_add_model))
+        }
 
-        if (modelSelectorOpen) {
+        modelSelectorFor?.let { index ->
             LaunchedEffect(state.baseUrl, state.storedKey, state.apiKeyInput) {
                 viewModel.loadModels()
             }
             ModelSelectorDialog(
-                currentModel = state.model,
+                currentModel = state.models[index].model,
                 availableModels = state.availableModels,
                 isLoading = state.isLoadingModels,
                 loadFailed = state.modelsError,
                 onRetry = viewModel::loadModels,
-                onSelect = viewModel::setModel,
-                onDismiss = { modelSelectorOpen = false },
+                onSelect = { viewModel.setModelAt(index, it) },
+                onDismiss = { modelSelectorFor = null },
             )
         }
-
-        // Reasoning capability: declared by the user, never inferred from the model name.
-        var reasoningOpen by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = reasoningOpen,
-            onExpandedChange = { reasoningOpen = it },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            OutlinedTextField(
-                value = reasoningLabel(state.reasoningSupport),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.settings_field_reasoning)) },
-                singleLine = true,
-                shape = AppShape.small,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningOpen) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor()
-                    .testTag(SettingsReasoningFieldTag),
-                enabled = !state.isSaving,
-            )
-            ExposedDropdownMenu(
-                expanded = reasoningOpen,
-                onDismissRequest = { reasoningOpen = false },
-            ) {
-                ReasoningSupport.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(reasoningLabel(option)) },
-                        onClick = {
-                            reasoningOpen = false
-                            viewModel.setReasoningSupport(option)
-                        },
-                    )
-                }
-            }
-        }
-        Text(
-            text = stringResource(R.string.settings_reasoning_hint),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = AppSpacing.xs),
-        )
 
         // Test connection button
         OutlinedButton(
@@ -670,13 +576,3 @@ internal fun ProviderEditor(
         }
     }
 }
-
-/** User-facing label for a declared provider reasoning capability. */
-@Composable
-private fun reasoningLabel(support: ReasoningSupport): String = stringResource(
-    when (support) {
-        ReasoningSupport.UNSPECIFIED -> R.string.settings_reasoning_unspecified
-        ReasoningSupport.EFFORT -> R.string.settings_reasoning_effort
-        ReasoningSupport.BUDGET -> R.string.settings_reasoning_budget
-    },
-)

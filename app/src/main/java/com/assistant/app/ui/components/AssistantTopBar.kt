@@ -1,13 +1,7 @@
 package com.assistant.app.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -18,13 +12,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -34,9 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.assistant.app.R
-import com.assistant.app.data.local.ProviderEntity
 import com.assistant.app.ui.theme.AppShape
-import com.assistant.app.ui.theme.AppSpacing
 
 /**
  * Chat top bar: transparent at rest so the conversation stays the visual
@@ -53,9 +40,6 @@ fun AssistantTopBar(
     onSearch: (() -> Unit)? = null,
     onToggleVoiceOutput: (() -> Unit)? = null,
     voiceOutputEnabled: Boolean = false,
-    activeProvider: ProviderEntity? = null,
-    savedProviders: List<ProviderEntity> = emptyList(),
-    onProviderSelected: ((Long) -> Unit)? = null,
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
     val scrim = MaterialTheme.colorScheme.background.copy(alpha = 0.94f)
@@ -95,70 +79,13 @@ fun AssistantTopBar(
             }
         },
         title = {
-            if (onBack != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                var pickerOpen by remember { mutableStateOf(false) }
-                val isInteractive = onProviderSelected != null && savedProviders.size > 1
-
-                Row(
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(AppShape.small)
-                        .then(
-                            if (isInteractive) {
-                                Modifier.clickable { pickerOpen = true }
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .padding(horizontal = AppSpacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (isInteractive) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = stringResource(R.string.cd_switch_provider),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .size(18.dp),
-                        )
-                    }
-                }
-
-                if (pickerOpen && savedProviders.isNotEmpty()) {
-                    NaraActionSheet(
-                        actions = savedProviders.map { provider ->
-                            NaraAction(
-                                label = provider.name,
-                                icon = AppIcons.Sparkle,
-                                trailing = provider.model,
-                                selected = if (provider.id == activeProvider?.id) true else null,
-                                onClick = {
-                                    if (provider.id != activeProvider?.id) {
-                                        onProviderSelected?.invoke(provider.id)
-                                    }
-                                },
-                            )
-                        },
-                        onDismiss = { pickerOpen = false },
-                    )
-                }
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         },
         actions = {
             if (onSearch != null) {

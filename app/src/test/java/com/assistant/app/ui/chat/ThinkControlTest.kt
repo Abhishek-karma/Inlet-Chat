@@ -48,13 +48,13 @@ class ThinkControlTest {
     }
 
     private class SelectionStore {
-        val saved = mutableMapOf<String, ReasoningConfig>()
+        val saved = mutableMapOf<Pair<Long, Long>, ReasoningConfig>()
 
         fun repository(chatLlm: MutableStateFlow<ChatLlmState>, dispatcher: CoroutineDispatcher): ChatRepository = ChatRepository(
             chatLlm = chatLlm,
             generationDispatcher = dispatcher,
-            loadThinkSelection = { model -> saved[model] },
-            saveThinkSelection = { model, config -> saved[model] = config },
+            loadThinkSelection = { providerId, modelId -> saved[providerId to modelId] },
+            saveThinkSelection = { providerId, modelId, config -> saved[providerId to modelId] = config },
         )
     }
 
@@ -70,13 +70,15 @@ class ThinkControlTest {
             ChatLlmState.Ready(
                 provider = provider,
                 model = "my-custom-reasoning-model",
+                providerId = 1L,
+                modelId = 10L,
                 thinkCapability = capability,
             ),
         )
         val repository = SelectionStore().repository(chatLlm, mainDispatcher)
         // The ViewModel applies the active capability to repository state the
-        // same way when the provider changes; mirror that here.
-        repository.onThinkModelChanged("my-custom-reasoning-model", capability)
+        // same way when the provider/model changes; mirror that here.
+        repository.onThinkModelChanged(1L, 10L, capability)
         block(repository, provider, chatLlm)
     }
 
@@ -188,24 +190,97 @@ class ThinkControlTest {
 
     @Test
     fun `persisted selection is validated against the model capability`() = runTest {
+        val capability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true)
         val chatLlm = MutableStateFlow<ChatLlmState>(
             ChatLlmState.Ready(
                 provider = FakeLlmProvider(helloScript),
-                model = "gemini-2.5-pro",
-                thinkCapability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
+                model = "local-model-7b",
+                providerId = 1L,
+                modelId = 10L,
+                thinkCapability = capability,
             ),
         )
         val mainDispatcher = UnconfinedTestDispatcher(testScheduler)
         val store = SelectionStore()
         val repository = store.repository(chatLlm, mainDispatcher)
-        repository.onThinkModelChanged("gemini-2.5-pro", ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true))
+        repository.onThinkModelChanged(1L, 10L, capability)
         repository.setThinkConfig(ReasoningConfig.Budget(8192))
-        assertEquals(ReasoningConfig.Budget(8192), store.saved["gemini-2.5-pro"])
+        assertEquals(ReasoningConfig.Budget(8192), store.saved[1L to 10L])
+
+        // The same model id under another provider keeps its own Think state.
+        store.saved[2L to 10L] = ReasoningConfig.Off
+        assertEquals(ReasoningConfig.Off, store.repository(chatLlm, mainDispatcher).let {
+            store.saved[2L to 10L]
+        })
 
         // A stored effort selection is dropped on a budget-only capability.
-        store.saved["gemini-2.5-pro"] = ReasoningConfig.Effort(ReasoningEffort.HIGH)
+        store.saved[1L to 10L] = ReasoningConfig.Effort(ReasoningEffort.HIGH)
         val clamped = store.repository(chatLlm, mainDispatcher)
-        clamped.onThinkModelChanged("gemini-2.5-pro", ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true))
+        clamped.onThinkModelChanged(1L, 10L, capability)
         assertEquals(ReasoningConfig.Auto, clamped.uiState.value.thinkConfig)
+    }
+
+    @Test
+    fun `switching the active model updates capability and validates the selection`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        // Two models of the same provider: one declared BUDGET, one unspecified.
+        val budgetReady = ChatLlmState.Ready(
+            provider = FakeLlmProvider(helloScript),
+            model = "alpha-model",
+            providerId = 1L,
+            modelId = 10L,
+            thinkCapability = ThinkCapability.Budget(1, 32768, allowOff = true, allowAuto = true),
+        )
+        val unknownReady = ChatLlmState.Ready(
+            provider = FakeLlmProvider(helloScript),
+            model = "alpha-model",
+            providerId = 1L,
+            modelId = 11L,
+            thinkCapability = ThinkCapability.Unknown,
+        )
+        val chatLlm = MutableStateFlow<ChatLlmState>(budgetReady)
+        val store = SelectionStore()
+        val repository = store.repository(chatLlm, dispatcher)
+
+        repository.onThinkModelChanged(1L, 10L, budgetReady.thinkCapability)
+        repository.setThinkConfig(ReasoningConfig.Budget(4096))
+        assertEquals(ReasoningConfig.Budget(4096), repository.uiState.value.thinkConfig)
+
+        // Switching to the unspecified model resets the selection: nothing is sent.
+        repository.onThinkModelChanged(1L, 11L, unknownReady.thinkCapability)
+        assertEquals(ReasoningConfig.Auto, repository.uiState.value.thinkConfig)
+        launch { repository.send("Hi") }
+        advanceUntilIdle()
+        assertNull(chatLlm.value.let { _ -> FakeLlmProvider(helloScript) }.requests.lastOrNull()?.reasoning)
+
+        // Switching back restores this model's own saved selection.
+        repository.onThinkModelChanged(1L, 10L, budgetReady.thinkCapability)
+        assertEquals(ReasoningConfig.Budget(4096), repository.uiState.value.thinkConfig)
+    }
+
+    @Test
+    fun `same model id under different providers keeps separate think state`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val capability = ThinkCapability.Effort(listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH))
+        val chatLlm = MutableStateFlow<ChatLlmState>(
+            ChatLlmState.Ready(
+                provider = FakeLlmProvider(helloScript),
+                model = "model-x",
+                providerId = 1L,
+                modelId = 5L,
+                thinkCapability = capability,
+            ),
+        )
+        val store = SelectionStore()
+        val repository = store.repository(chatLlm, dispatcher)
+        repository.onThinkModelChanged(1L, 5L, capability)
+        repository.setThinkConfig(ReasoningConfig.Effort(ReasoningEffort.LOW))
+        assertEquals(ReasoningConfig.Effort(ReasoningEffort.LOW), store.saved[1L to 5L])
+
+        // Same model id, other provider: no selection stored yet.
+        val other = store.repository(chatLlm, dispatcher)
+        other.onThinkModelChanged(2L, 5L, capability)
+        assertEquals(ReasoningConfig.Auto, other.uiState.value.thinkConfig)
+        assertNull(store.saved[2L to 5L])
     }
 }

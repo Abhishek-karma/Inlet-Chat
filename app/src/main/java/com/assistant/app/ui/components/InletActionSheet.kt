@@ -42,22 +42,13 @@ import com.assistant.app.ui.theme.rememberHaptics
  */
 data class InletAction(
     val label: String,
-    val icon: Int,
+    val icon: Int? = null,
     val onClick: () -> Unit,
     val destructive: Boolean = false,
     val trailing: String? = null,
-    val selected: Boolean? = null,
+    val selected: Boolean = false,
     val onClickLabel: String? = null,
 )
-
-typealias NaraAction = InletAction
-typealias InletChatAction = InletAction
-
-@Composable
-fun NaraActionSheet(
-    actions: List<InletAction>,
-    onDismiss: () -> Unit,
-) = InletActionSheet(actions, onDismiss)
 
 /**
  * Inlet Chat Action Sheet: Ergonomic thumb-reachable bottom menu.
@@ -80,14 +71,15 @@ fun InletActionSheet(
                 .navigationBarsPadding()
                 .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xs),
         ) {
+            val hasIcons = actions.any { it.icon != null }
             actions.forEachIndexed { index, action ->
                 if (index > 0) {
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.padding(start = 48.dp),
+                        modifier = Modifier.padding(start = if (hasIcons) 48.dp else AppSpacing.sm),
                     )
                 }
-                NaraActionRow(
+                InletActionRow(
                     action = action,
                     onClick = {
                         haptics(HapticFeedbackType.TextHandleMove)
@@ -102,8 +94,8 @@ fun InletActionSheet(
 }
 
 @Composable
-private fun NaraActionRow(
-    action: NaraAction,
+private fun InletActionRow(
+    action: InletAction,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,7 +110,6 @@ private fun NaraActionRow(
             .fillMaxWidth()
             .clip(AppShape.medium)
             .clickable(
-                enabled = action.selected != false,
                 onClickLabel = action.onClickLabel ?: action.label,
                 role = Role.Button,
                 onClick = onClick,
@@ -126,29 +117,31 @@ private fun NaraActionRow(
             .padding(horizontal = AppSpacing.sm, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(
-                    if (action.destructive) {
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+        if (action.icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (action.destructive) {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(action.icon),
+                    contentDescription = null,
+                    tint = if (action.destructive) {
+                        MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(action.icon),
-                contentDescription = null,
-                tint = if (action.destructive) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(18.dp),
-            )
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
 
         Text(
@@ -159,14 +152,14 @@ private fun NaraActionRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = AppSpacing.md),
+                .padding(start = if (action.icon != null) AppSpacing.md else 0.dp),
         )
 
         action.trailing?.let { trailing ->
             Text(
                 text = trailing,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = AppCodeFontFamily),
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -175,7 +168,7 @@ private fun NaraActionRow(
             )
         }
 
-        if (action.selected == true) {
+        if (action.selected) {
             Icon(
                 painter = painterResource(R.drawable.ic_check),
                 contentDescription = stringResource(R.string.cd_selected),

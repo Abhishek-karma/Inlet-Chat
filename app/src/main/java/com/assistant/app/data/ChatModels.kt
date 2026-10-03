@@ -1,9 +1,7 @@
 package com.assistant.app.data
 
-import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.llm.LlmProvider
 import com.assistant.app.llm.model.ReasoningConfig
-import com.assistant.app.llm.model.ReasoningEffort
 import com.assistant.app.llm.model.ThinkCapability
 import com.assistant.app.llm.model.UiAttachment
 import com.assistant.app.llm.model.UiMessage
@@ -62,7 +60,7 @@ data class ChatUiState(
 )
 
 /**
- * Generation wiring resolved from the active provider.
+ * Generation wiring resolved from the active provider and its active model.
  */
 sealed interface ChatLlmState {
     data object Loading : ChatLlmState
@@ -70,28 +68,11 @@ sealed interface ChatLlmState {
         val provider: LlmProvider,
         val model: String,
         val providerId: Long = 0,
+        /** Stable id of the active saved model; keys the Think selection. */
+        val modelId: Long = 0,
         val name: String = "",
-        /** What reasoning control the active provider's profile declares. */
+        /** What reasoning control the active model profile declares. */
         val thinkCapability: ThinkCapability = ThinkCapability.Unsupported,
     ) : ChatLlmState
     data object NeedsSetup : ChatLlmState
-}
-
-/**
- * Maps the provider profile's explicit reasoning declaration to the runtime
- * capability. UNSPECIFIED (the default) is [ThinkCapability.Unknown] — safe,
- * no parameter is ever sent without an explicit declaration. Capability is a
- * property of the configured profile, never inferred from the model name.
- */
-fun ReasoningSupport.toThinkCapability(): ThinkCapability = when (this) {
-    ReasoningSupport.UNSPECIFIED -> ThinkCapability.Unknown
-    ReasoningSupport.EFFORT -> ThinkCapability.Effort(
-        listOf(ReasoningEffort.LOW, ReasoningEffort.MEDIUM, ReasoningEffort.HIGH),
-    )
-    ReasoningSupport.BUDGET -> ThinkCapability.Budget(
-        minTokens = 1,
-        maxTokens = 32768,
-        allowOff = true,
-        allowAuto = true,
-    )
 }

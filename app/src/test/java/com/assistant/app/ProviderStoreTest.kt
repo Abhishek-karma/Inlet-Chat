@@ -2,10 +2,10 @@ package com.assistant.app
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.assistant.app.data.ModelDraft
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
 import com.assistant.app.data.local.ChatDatabase
-import com.assistant.app.data.local.ReasoningSupport
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.InMemorySecureKeyStore
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +21,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Behavior contract for [ProviderStore]: CRUD, the single-active-provider rule
- * with fallback on delete, per-provider key isolation, validation, and the
- * one-time seeding of the pre-1.2 configuration.
+ * Behavior contract for [ProviderStore]: CRUD, saved models per provider with
+ * one active, the single-active-provider rule with fallback on delete, shared
+ * per-provider keys, validation, and the one-time seeding of the pre-1.2
+ * configuration.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -48,13 +49,19 @@ class ProviderStoreTest {
     private val validDraft = ProviderDraft(
         name = "OpenAI",
         baseUrl = "https://api.openai.com/v1",
-        model = "gpt-4o-mini",
     )
+    private val oneModel = listOf(ModelDraft(model = "gpt-4o-mini", isActive = true))
+
+    private suspend fun addProvider(
+        draft: ProviderDraft = validDraft,
+        key: String? = "sk-1",
+        models: List<ModelDraft> = oneModel,
+    ): Long = store.addProvider(draft, key, models)
 
     @Test
     fun addProvidersKeysAreIsolatedAndFirstBecomesActive() = runTest {
-        val first = store.addProvider(validDraft, "sk-first")
-        val second = store.addProvider(validDraft.copy(name = "Other"), "sk-second")
+        val first = addProvider(key = "sk-first")
+        val second = addProvider(validDraft.copy(name = "Other"), "sk-second")
 
         assertEquals("sk-first", store.apiKey(first))
         assertEquals("sk-second", store.apiKey(second))
@@ -65,43 +72,95 @@ class ProviderStoreTest {
 
     @Test
     fun updateProviderKeepsStoredKeyWhenEntryBlank() = runTest {
-        val id = store.addProvider(validDraft, "sk-original")
+        val id = addProvider(key = "sk-original")
 
-        store.updateProvider(id, validDraft.copy(name = "Renamed"), null)
+        store.updateProvider(id, validDraft.copy(name = "Renamed"), null, oneModel)
         assertEquals("sk-original", store.apiKey(id))
         assertEquals("Renamed", store.providers().firstBounded().single { it.id == id }.name)
 
-        store.updateProvider(id, validDraft, "sk-replacement")
+        store.updateProvider(id, validDraft, "sk-replacement", oneModel)
         assertEquals("sk-replacement", store.apiKey(id))
     }
 
     @Test
-    fun reasoningSupportDefaultsToUnspecifiedAndRoundTripsWhenUpdated() = runTest {
-        val id = store.addProvider(validDraft, "sk-1")
-
-        // An added provider carries no declared reasoning support: unknown.
-        assertEquals(
-            ReasoningSupport.UNSPECIFIED,
-            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
+    fun providerStoresManyModelsWithOneActive() = runTest {
+        val id = addProvider(
+            models = listOf(
+                ModelDraft(model = "alpha-model", isActive = true),
+                ModelDraft(model = "bar"),
+                ModelDraft(model = "local-model-7b"),
+            ),
         )
 
-        store.updateProvider(id, validDraft.copy(reasoningSupport = ReasoningSupport.EFFORT), null)
-        assertEquals(
-            ReasoningSupport.EFFORT,
-            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
+        val models = store.modelsOf(id)
+        assertEquals(listOf("alpha-model", "bar", "local-model-7b"), models.map { it.model })
+        assertEquals("alpha-model", store.activeModel(id)?.model)
+    }
+
+    @Test
+    fun switchingActiveModelKeepsTheProviderAndItsKey() = runTest {
+        val id = addProvider(
+            models = listOf(ModelDraft(model = "first", isActive = true), ModelDraft(model = "second")),
+        )
+        val second = store.modelsOf(id).single { it.model == "second" }
+
+        store.setActiveModel(id, second.id)
+
+        assertEquals("second", store.activeModel(id)?.model)
+        assertEquals(id, store.activeProvider().firstBounded()?.id)
+        assertEquals("sk-1", store.apiKey(id))
+    }
+
+    @Test
+    fun deletingActiveModelPromotesAnother() = runTest {
+        val id = addProvider(
+            models = listOf(ModelDraft(model = "first", isActive = true), ModelDraft(model = "second")),
+        )
+        val first = store.modelsOf(id).single { it.model == "first" }
+
+        store.deleteModel(id, first.id)
+
+        assertEquals("second", store.activeModel(id)?.model)
+        // The provider and its key survive a model deletion.
+        assertEquals("sk-1", store.apiKey(id))
+    }
+
+    @Test
+    fun deletingTheLastModelLeavesTheProviderWithoutAnActiveModel() = runTest {
+        val id = addProvider()
+        val only = store.modelsOf(id).single()
+
+        store.deleteModel(id, only.id)
+
+        assertNull(store.activeModel(id))
+        assertEquals("sk-1", store.apiKey(id))
+    }
+
+    @Test
+    fun updatingModelsKeepsExactlyTheSavedSet() = runTest {
+        val id = addProvider(
+            models = listOf(ModelDraft(model = "keep", isActive = true), ModelDraft(model = "remove")),
+        )
+        val keep = store.modelsOf(id).single { it.model == "keep" }
+
+        store.updateProvider(
+            id,
+            validDraft,
+            null,
+            listOf(
+                ModelDraft(id = keep.id, model = "keep", isActive = true),
+                ModelDraft(model = "added"),
+            ),
         )
 
-        store.updateProvider(id, validDraft.copy(reasoningSupport = ReasoningSupport.BUDGET), null)
-        assertEquals(
-            ReasoningSupport.BUDGET,
-            store.providers().firstBounded().single { it.id == id }.reasoningSupport,
-        )
+        assertEquals(listOf("keep", "added"), store.modelsOf(id).map { it.model })
+        assertEquals("keep", store.activeModel(id)?.model)
     }
 
     @Test
     fun setActiveSwitchesTheActiveProvider() = runTest {
-        val first = store.addProvider(validDraft, "sk-1")
-        val second = store.addProvider(validDraft.copy(name = "Second"), "sk-2")
+        val first = addProvider()
+        val second = addProvider(validDraft.copy(name = "Second"), "sk-2")
 
         store.setActive(second)
 
@@ -113,8 +172,8 @@ class ProviderStoreTest {
 
     @Test
     fun deletingActiveProviderFallsBackToAnother() = runTest {
-        val first = store.addProvider(validDraft, "sk-1")
-        val second = store.addProvider(validDraft.copy(name = "Second"), "sk-2")
+        val first = addProvider()
+        val second = addProvider(validDraft.copy(name = "Second"), "sk-2")
         store.setActive(second)
 
         store.deleteProvider(second)
@@ -127,35 +186,46 @@ class ProviderStoreTest {
     }
 
     @Test
+    fun deletingProviderRemovesItsModels() = runTest {
+        val id = addProvider(
+            models = listOf(ModelDraft(model = "a", isActive = true), ModelDraft(model = "b")),
+        )
+        store.deleteProvider(id)
+        assertTrue(store.modelsOf(id).isEmpty())
+    }
+
+    @Test
     fun validateEnforcesNameUrlModelAndKey() = runTest {
         assertEquals(
             ProviderStore.ERROR_NAME_REQUIRED,
-            store.validate(0, validDraft.copy(name = " "), "sk"),
+            store.validate(0, validDraft.copy(name = " "), oneModel, "sk"),
         )
         assertEquals(
             ProviderStore.ERROR_BASE_URL_INVALID,
-            store.validate(0, validDraft.copy(baseUrl = "example.com"), "sk"),
+            store.validate(0, validDraft.copy(baseUrl = "example.com"), oneModel, "sk"),
         )
         assertEquals(
             ProviderStore.ERROR_MODEL_REQUIRED,
-            store.validate(0, validDraft.copy(model = ""), "sk"),
+            store.validate(0, validDraft, emptyList(), "sk"),
+        )
+        assertEquals(
+            ProviderStore.ERROR_MODEL_REQUIRED,
+            store.validate(0, validDraft, listOf(ModelDraft(model = " ")), "sk"),
         )
         assertEquals(
             ProviderStore.ERROR_API_KEY_REQUIRED,
-            store.validate(0, validDraft, null),
+            store.validate(0, validDraft, oneModel, null),
         )
-        assertNull(store.validate(0, validDraft, "sk-new"))
+        assertNull(store.validate(0, validDraft, oneModel, "sk-new"))
 
         // Existing provider with a stored key: blank entry is fine.
-        val id = store.addProvider(validDraft, "sk-stored")
-        assertNull(store.validate(id, validDraft, null))
-        // And with no stored key it is still required.
-        store.updateProvider(id, validDraft, null)
+        val id = addProvider(key = "sk-stored")
+        assertNull(store.validate(id, validDraft, oneModel, null))
         store.deleteProvider(id)
-        val noKey = store.addProvider(validDraft, null)
+        val noKey = addProvider(key = null)
         assertEquals(
             ProviderStore.ERROR_API_KEY_REQUIRED,
-            store.validate(noKey, validDraft, null),
+            store.validate(noKey, validDraft, oneModel, null),
         )
     }
 
@@ -164,24 +234,24 @@ class ProviderStoreTest {
         // Public remote HTTP is rejected to prevent cleartext exposure
         assertEquals(
             ProviderStore.ERROR_CLEARTEXT_NOT_PERMITTED,
-            store.validate(0, validDraft.copy(baseUrl = "http://api.openai.com/v1"), "sk"),
+            store.validate(0, validDraft.copy(baseUrl = "http://api.openai.com/v1"), oneModel, "sk"),
         )
         assertEquals(
             ProviderStore.ERROR_CLEARTEXT_NOT_PERMITTED,
-            store.validate(0, validDraft.copy(baseUrl = "http://evil.com/v1"), "sk"),
+            store.validate(0, validDraft.copy(baseUrl = "http://evil.com/v1"), oneModel, "sk"),
         )
 
         // Local and private network domains are allowed for self-hosted LLMs
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://localhost:11434/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://127.0.0.1:11434/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://10.0.2.2:11434/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://my-pc.local:11434/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://ollama.lan:11434/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://desktop.home:8080/v1"), "sk"))
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://cluster.internal:8000/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://localhost:11434/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://127.0.0.1:11434/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://10.0.2.2:11434/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://my-pc.local:11434/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://ollama.lan:11434/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://desktop.home:8080/v1"), oneModel, "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "http://cluster.internal:8000/v1"), oneModel, "sk"))
 
         // Standard HTTPS is allowed everywhere
-        assertNull(store.validate(0, validDraft.copy(baseUrl = "https://api.openai.com/v1"), "sk"))
+        assertNull(store.validate(0, validDraft.copy(baseUrl = "https://api.openai.com/v1"), oneModel, "sk"))
     }
 
     @Test
@@ -196,8 +266,10 @@ class ProviderStoreTest {
         val seeded = providers.single()
         assertEquals("Legacy", seeded.name)
         assertEquals("https://legacy.example.com/v1", seeded.baseUrl)
-        assertEquals("legacy-model", seeded.model)
         assertTrue(seeded.isActive)
+        // The legacy model became the provider's first, active saved model.
+        val model = store.activeModel(seeded.id)
+        assertEquals("legacy-model", model?.model)
         assertEquals("sk-legacy", store.apiKey(seeded.id))
         assertNull(keyStore.legacyApiKey())
         assertNull(preferences.legacyProviderConfig())
@@ -213,26 +285,19 @@ class ProviderStoreTest {
     fun seedingWithoutUsableLegacyConfigurationCreatesNothing() = runTest {
         store.ensureSeeded()
         assertEquals(0, store.providers().firstBounded().size)
-
-        preferences.installLegacyProviderConfig(name = "", baseUrl = "", model = "")
-        keyStore.setLegacyApiKey("sk-unused")
-        store.ensureSeeded()
-        assertEquals(0, store.providers().firstBounded().size)
-        assertNull(keyStore.legacyApiKey())
     }
 
     @Test
-    fun seedingSkipsWhenProvidersAlreadyExist() = runTest {
-        store.addProvider(validDraft, "sk-1")
-        keyStore.setLegacyApiKey("sk-legacy")
-        preferences.installLegacyProviderConfig("Legacy", "https://legacy.example.com/v1", "legacy-model")
+    fun activeSelectionTracksProviderAndModelChanges() = runTest {
+        val first = addProvider(models = listOf(ModelDraft(model = "m1", isActive = true), ModelDraft(model = "m2")))
+        val second = addProvider(validDraft.copy(name = "Second"), "sk-2")
+        assertEquals(first, store.activeSelection().firstBounded()?.provider?.id)
 
-        store.ensureSeeded()
+        val m2 = store.modelsOf(first).single { it.model == "m2" }
+        store.setActiveModel(first, m2.id)
+        assertEquals(m2.id, store.activeSelection().firstBounded()?.model?.id)
 
-        // The existing provider is untouched, no "Legacy" row was created, and
-        // the legacy fields are cleared.
-        assertEquals(1, store.providers().firstBounded().size)
-        assertEquals("OpenAI", store.providers().firstBounded().single().name)
-        assertNull(preferences.legacyProviderConfig())
+        store.setActive(second)
+        assertEquals(second, store.activeSelection().firstBounded()?.provider?.id)
     }
 }

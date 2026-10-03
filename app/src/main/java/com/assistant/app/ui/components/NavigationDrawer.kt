@@ -2,6 +2,7 @@ package com.assistant.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -25,11 +28,16 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +49,9 @@ import com.assistant.app.ui.theme.AppSpacing
 /** Narrower than the Material default (360 dp) so the drawer stays compact. */
 private val DRAWER_WIDTH = 300.dp
 
+/** One row of the drawer's model switcher. */
+data class ChatModelOption(val id: Long, val model: String, val providerName: String)
+
 private enum class DrawerDestination(val icon: Int, val labelRes: Int) {
     NewChat(AppIcons.Add, R.string.drawer_new_chat),
     History(AppIcons.History, R.string.drawer_history),
@@ -48,7 +59,8 @@ private enum class DrawerDestination(val icon: Int, val labelRes: Int) {
 }
 
 /**
- * Inlet Chat App Drawer: Brand presence, active model indicator, and primary destinations.
+ * Inlet Chat App Drawer: Brand presence, the active model with its switcher,
+ * and primary destinations.
  */
 @Composable
 fun AppDrawer(
@@ -58,8 +70,13 @@ fun AppDrawer(
     onNewChat: () -> Unit,
     onHistory: () -> Unit,
     onSettings: () -> Unit,
+    savedModels: List<ChatModelOption> = emptyList(),
+    activeModelId: Long? = null,
+    onModelSelected: ((Long) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    var switcherOpen by remember { mutableStateOf(false) }
+    val canSwitch = onModelSelected != null && savedModels.isNotEmpty()
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -150,7 +167,6 @@ fun AppDrawer(
 
                     Spacer(Modifier.weight(1f))
 
-                    // Connected Model Status Card
                     if (!activeModel.isNullOrBlank()) {
                         Surface(
                             shape = AppShape.medium,
@@ -161,7 +177,14 @@ fun AppDrawer(
                                     1.dp,
                                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                                     AppShape.medium,
-                                ),
+                                )
+                                .clickable(
+                                    enabled = canSwitch,
+                                    onClickLabel = stringResource(R.string.cd_switch_model),
+                                    role = Role.Button,
+                                ) {
+                                    switcherOpen = true
+                                },
                         ) {
                             Row(
                                 modifier = Modifier.padding(AppSpacing.md),
@@ -174,9 +197,9 @@ fun AppDrawer(
                                         .background(MaterialTheme.colorScheme.primary),
                                 )
                                 Spacer(Modifier.width(AppSpacing.sm))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Active Provider",
+                                        text = stringResource(R.string.drawer_active_model),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -191,8 +214,34 @@ fun AppDrawer(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                                if (canSwitch) {
+                                    Icon(
+                                        imageVector = Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    if (switcherOpen && savedModels.isNotEmpty()) {
+                        InletActionSheet(
+                            actions = savedModels.map { model ->
+                                InletAction(
+                                    label = model.model,
+                                    trailing = model.providerName,
+                                    selected = model.id == activeModelId,
+                                    onClick = {
+                                        if (model.id != activeModelId) {
+                                            onModelSelected?.invoke(model.id)
+                                        }
+                                    },
+                                )
+                            },
+                            onDismiss = { switcherOpen = false },
+                        )
                     }
                 }
             }

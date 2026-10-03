@@ -4,9 +4,10 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.assistant.app.data.ModelDraft
 import com.assistant.app.data.ProviderDraft
 import com.assistant.app.data.ProviderStore
-import com.assistant.app.data.local.ReasoningSupport
+import com.assistant.app.data.local.ProviderModelEntity
 import com.assistant.app.data.settings.AppPreferences
 import com.assistant.app.data.settings.AppTheme
 import com.assistant.app.data.settings.SecureKeyStore
@@ -44,7 +45,7 @@ sealed interface ConnectionOutcome {
 data class ProviderSummary(
     val id: Long,
     val name: String,
-    val model: String,
+    val activeModel: String?,
     val isActive: Boolean,
 )
 
@@ -54,11 +55,11 @@ data class SettingsUiState(
     val editingId: Long? = null,
     val name: String = "",
     val baseUrl: String = "",
-    val model: String = "",
-    val reasoningSupport: ReasoningSupport = ReasoningSupport.UNSPECIFIED,
-        val availableModels: List<String> = emptyList(),
+    /** Saved models being edited; the active one is flagged in [ModelDraft.isActive]. */
+    val models: List<ModelDraft> = emptyList(),
+    val availableModels: List<String> = emptyList(),
     val isLoadingModels: Boolean = false,
-        val modelsError: Boolean = false,
+    val modelsError: Boolean = false,
     val apiKeyInput: String = "",
     val storedKey: String? = null,
     val revealKey: Boolean = false,
@@ -83,7 +84,7 @@ data class SettingsUiState(
 ) {
     override fun toString(): String =
         "SettingsUiState(providers=$providers, isEditing=$isEditing, editingId=$editingId, " +
-            "name=$name, baseUrl=$baseUrl, model=$model, apiKeyInput=<redacted>, " +
+            "name=$name, baseUrl=$baseUrl, models=${models.size}, apiKeyInput=<redacted>, " +
             "storedKey=${if (storedKey != null) "<present>" else "null"}, " +
             "revealKey=$revealKey, voiceOutputEnabled=$voiceOutputEnabled, " +
             "appearance=$appearance, reasoningVisible=$reasoningVisible, " +
@@ -136,11 +137,11 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch {
-            providerStore.providers().collect { list ->
+            providerStore.providersWithModel().collect { list ->
                 _uiState.update { state ->
                     state.copy(
                         providers = list.map { provider ->
-                            ProviderSummary(provider.id, provider.name, provider.model, provider.isActive)
+                            ProviderSummary(provider.id, provider.name, provider.activeModel, provider.isActive)
                         },
                     )
                 }
@@ -185,8 +186,7 @@ class SettingsViewModel(
                 editingId = null,
                 name = "",
                 baseUrl = "",
-                model = "",
-                reasoningSupport = ReasoningSupport.UNSPECIFIED,
+                models = listOf(ModelDraft(isActive = true)),
                 apiKeyInput = "",
                 storedKey = null,
                 revealKey = false,
@@ -202,17 +202,13 @@ class SettingsViewModel(
             it.copy(
                 name = name,
                 baseUrl = baseUrl,
-                model = defaultModel,
+                models = listOf(ModelDraft(model = defaultModel, isActive = true)),
             )
         }
         onFormChanged()
     }
 
-    fun fillNagaPreset() {
-        fillPreset("Naga", "https://api.naga.ac/v1", "dots-3-note-preview:free")
-    }
-
-        fun edit(id: Long) {
+    fun edit(id: Long) {
         viewModelScope.launch {
             val entity = providerStore.provider(id) ?: return@launch
             _uiState.update {
@@ -221,8 +217,7 @@ class SettingsViewModel(
                     editingId = id,
                     name = entity.name,
                     baseUrl = entity.baseUrl,
-                    model = entity.model,
-                    reasoningSupport = entity.reasoningSupport,
+                    models = providerStore.modelsOf(id).map { it.toDraft() },
                     apiKeyInput = "",
                     storedKey = providerStore.apiKey(id),
                     revealKey = false,
@@ -241,7 +236,7 @@ class SettingsViewModel(
                 editingId = null,
                 name = "",
                 baseUrl = "",
-                model = "",
+                models = emptyList(),
                 apiKeyInput = "",
                 storedKey = null,
                 revealKey = false,
@@ -272,9 +267,40 @@ class SettingsViewModel(
 
     fun setBaseUrl(value: String) = updateEditor { it.copy(baseUrl = value) }
 
-    fun setModel(value: String) = updateEditor { it.copy(model = value) }
+    private fun ProviderModelEntity.toDraft(): ModelDraft = ModelDraft(
+        id = id,
+        model = model,
+        isActive = isActive,
+    )
 
-    fun setReasoningSupport(value: ReasoningSupport) = updateEditor { it.copy(reasoningSupport = value) }
+    /** Appends a new, non-active model draft. */
+    fun addModel() = updateEditor { state ->
+        state.copy(models = state.models + ModelDraft())
+    }
+
+    /** Removes the model at [index]; a remaining model inherits the active flag. */
+    fun removeModel(index: Int) = updateEditor { state ->
+        val remaining = state.models.toMutableList().also {
+            if (index in it.indices) it.removeAt(index)
+        }
+        if (remaining.isNotEmpty() && remaining.none { it.isActive }) {
+            remaining[0] = remaining[0].copy(isActive = true)
+        }
+        state.copy(models = remaining)
+    }
+
+    /** Edits the model at [index]. */
+    fun updateModel(index: Int, transform: (ModelDraft) -> ModelDraft) = updateEditor { state ->
+        state.copy(models = state.models.mapIndexed { i, draft -> if (i == index) transform(draft) else draft })
+    }
+
+    /** Makes the model at [index] the active one of this provider. */
+    fun setActiveModel(index: Int) = updateEditor { state ->
+        state.copy(models = state.models.mapIndexed { i, draft -> draft.copy(isActive = i == index) })
+    }
+
+    /** Selects a model id from the provider's `/models` list for row [index]. */
+    fun setModelAt(index: Int, value: String) = updateModel(index) { it.copy(model = value) }
 
     fun setApiKeyInput(value: String) {
         _uiState.update { it.copy(apiKeyInput = value) }
@@ -295,22 +321,17 @@ class SettingsViewModel(
         if (_uiState.value.isSaving) return
         viewModelScope.launch {
             val state = _uiState.value
-            val draft = ProviderDraft(
-                name = state.name.trim(),
-                baseUrl = state.baseUrl.trim(),
-                model = state.model.trim(),
-                reasoningSupport = state.reasoningSupport,
-            )
+            val draft = ProviderDraft(name = state.name.trim(), baseUrl = state.baseUrl.trim())
             val enteredKey = state.apiKeyInput.trim().ifEmpty { null }
-            val error = providerStore.validate(state.editingId ?: 0, draft, enteredKey)
+            val error = providerStore.validate(state.editingId ?: 0, draft, state.models, enteredKey)
             _uiState.update { it.copy(formError = error) }
             if (error != null) return@launch
             _uiState.update { it.copy(isSaving = true) }
             try {
                 if (state.editingId == null) {
-                    providerStore.addProvider(draft, enteredKey)
+                    providerStore.addProvider(draft, enteredKey, state.models)
                 } else {
-                    providerStore.updateProvider(state.editingId, draft, enteredKey)
+                    providerStore.updateProvider(state.editingId, draft, enteredKey, state.models)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -325,7 +346,7 @@ class SettingsViewModel(
                     editingId = null,
                     name = "",
                     baseUrl = "",
-                    model = "",
+                    models = emptyList(),
                     apiKeyInput = "",
                     storedKey = null,
                     revealKey = false,
@@ -352,7 +373,7 @@ class SettingsViewModel(
                         editingId = null,
                         name = "",
                         baseUrl = "",
-                        model = "",
+                        models = emptyList(),
                         apiKeyInput = "",
                         storedKey = null,
                         revealKey = false,
@@ -375,23 +396,26 @@ class SettingsViewModel(
         if (_uiState.value.isTesting) return
         viewModelScope.launch {
             val state = _uiState.value
-            val draft = ProviderDraft(state.name.trim(), state.baseUrl.trim(), state.model.trim())
+            val draft = ProviderDraft(state.name.trim(), state.baseUrl.trim())
             val enteredKey = state.apiKeyInput.trim().ifEmpty { null }
-            val error = providerStore.validate(state.editingId ?: 0, draft, enteredKey)
+            val error = providerStore.validate(state.editingId ?: 0, draft, state.models, enteredKey)
             _uiState.update { it.copy(formError = error) }
             if (error != null) return@launch
             _uiState.update { it.copy(isTesting = true, connectionOutcome = null) }
             // An empty key field means "keep the stored key".
             val apiKey = enteredKey ?: state.storedKey.orEmpty()
+            val testModel = state.models.firstOrNull { it.isActive }?.model
+                ?: state.models.firstOrNull()?.model
+                ?: ""
             val request = ChatRequest(
-                model = draft.model,
+                model = testModel,
                 messages = listOf(Role.USER to PING_MESSAGE),
             )
             val failure = try {
                 withContext(connectionTestDispatcher) {
                     try {
                         val first = withTimeout(TEST_TIMEOUT_MS) {
-                            newTestProvider(draft.baseUrl, draft.model, apiKey)
+                            newTestProvider(draft.baseUrl, testModel, apiKey)
                                 .stream(request)
                                 .firstOrNull { it !is ChatChunk.Done }
                         }
@@ -563,8 +587,13 @@ class SettingsViewModel(
         validationJob?.cancel()
         validationJob = viewModelScope.launch {
             val state = _uiState.value
-            val draft = ProviderDraft(state.name.trim(), state.baseUrl.trim(), state.model.trim())
-            val error = providerStore.validate(state.editingId ?: 0, draft, state.apiKeyInput.trim().ifEmpty { null })
+            val draft = ProviderDraft(state.name.trim(), state.baseUrl.trim())
+            val error = providerStore.validate(
+                state.editingId ?: 0,
+                draft,
+                state.models,
+                state.apiKeyInput.trim().ifEmpty { null },
+            )
             _uiState.update { it.copy(formError = error) }
         }
     }

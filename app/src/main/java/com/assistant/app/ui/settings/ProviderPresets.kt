@@ -32,13 +32,15 @@ internal data class ProviderPreset(
     val keyUrl: String,
 )
 
+internal val geminiPreset = ProviderPreset(
+    name = "Google Gemini",
+    baseUrl = "https://generativelanguage.googleapis.com",
+    defaultModel = "gemini-2.5-flash",
+    keyUrl = "https://aistudio.google.com/app/apikey",
+)
+
 internal val ProviderPresets = listOf(
-    ProviderPreset(
-        name = "Gemini",
-        baseUrl = "https://generativelanguage.googleapis.com",
-        defaultModel = "gemini-2.5-flash",
-        keyUrl = "https://aistudio.google.com/app/apikey",
-    ),
+    geminiPreset,
     ProviderPreset(
         name = "OpenAI",
         baseUrl = "https://api.openai.com/v1",
@@ -65,11 +67,6 @@ internal val ProviderPresets = listOf(
     ),
 )
 
-internal const val GEMINI_NAME = "Gemini"
-internal const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com"
-internal const val GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
-internal const val GEMINI_KEY_URL = "https://aistudio.google.com/app/apikey"
-
 internal fun isGemini(baseUrl: String, name: String = ""): Boolean {
     val b = baseUrl.trim().lowercase()
     val n = name.trim().lowercase()
@@ -82,3 +79,9 @@ internal fun presetForBaseUrl(baseUrl: String): ProviderPreset? {
     val normalized = baseUrl.trim().trimEnd('/')
     return ProviderPresets.firstOrNull { it.baseUrl.trimEnd('/') == normalized }
 }
+
+/** The preset the editor is currently showing, or null for a custom endpoint. */
+internal fun presetFor(baseUrl: String, name: String): ProviderPreset? =
+    presetForBaseUrl(baseUrl)
+        ?: if (isGemini(baseUrl, name)) geminiPreset
+        else ProviderPresets.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }

@@ -72,19 +72,21 @@ class AppPreferencesTest {
     }
 
     @Test
-    fun `think selection round-trips per model and defaults to null`() = runTest {
-        assertNull(preferences.thinkSelection("gemini-2.5-flash"))
+    fun `think selection round-trips per provider and model and defaults to null`() = runTest {
+        assertNull(preferences.thinkSelection(providerId = 1L, modelId = 10L))
 
-        preferences.setThinkSelection("gemini-2.5-flash", ReasoningConfig.Budget(4096))
-        preferences.setThinkSelection("o3-mini", ReasoningConfig.Effort(ReasoningEffort.HIGH))
-        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection("gemini-2.5-flash"))
-        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), preferences.thinkSelection("o3-mini"))
+        preferences.setThinkSelection(1L, 10L, ReasoningConfig.Budget(4096))
+        preferences.setThinkSelection(1L, 11L, ReasoningConfig.Effort(ReasoningEffort.HIGH))
+        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection(1L, 10L))
+        assertEquals(ReasoningConfig.Effort(ReasoningEffort.HIGH), preferences.thinkSelection(1L, 11L))
 
-        // Keys are normalized, so a differently-cased model id reads the same entry.
-        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection("  Gemini-2.5-Flash "))
+        // The same model id under a different provider keeps separate Think state.
+        preferences.setThinkSelection(2L, 10L, ReasoningConfig.Off)
+        assertEquals(ReasoningConfig.Budget(4096), preferences.thinkSelection(1L, 10L))
+        assertEquals(ReasoningConfig.Off, preferences.thinkSelection(2L, 10L))
 
         // Models without a stored selection stay null.
-        assertNull(preferences.thinkSelection("llama3.1:8b"))
+        assertNull(preferences.thinkSelection(1L, 99L))
     }
 
     @Test

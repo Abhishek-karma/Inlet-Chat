@@ -64,32 +64,45 @@ data class MessageVersionEntity(
  * One saved OpenAI-compatible provider configuration; its API key lives in
  * [com.assistant.app.data.settings.SecureKeyStore] under [ProviderEntity.id].
  * Exactly one row has [isActive] set — the provider the chat uses.
+ * Saved models live in [ProviderModelEntity], one active model per provider.
  */
 @Entity(tableName = "providers")
 data class ProviderEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val baseUrl: String,
-    val model: String,
     val isActive: Boolean = false,
-    val reasoningSupport: ReasoningSupport = ReasoningSupport.UNSPECIFIED,
 )
 
-/**
- * The provider-level reasoning control the user has declared for a profile.
- * [UNSPECIFIED] (the default) means unknown → no reasoning parameter is sent.
- */
-enum class ReasoningSupport {
-    UNSPECIFIED,
-    EFFORT,
-    BUDGET;
-}
+/** One saved model of a provider; reasoning capability is detected from [model]'s id. */
+@Entity(tableName = "provider_models", indices = [Index("providerId")])
+data class ProviderModelEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val providerId: Long,
+    val model: String,
+    val isActive: Boolean = false,
+)
+
+/** A provider row plus the name of its active model (null when it has none). */
+data class ProviderWithActiveModel(
+    val id: Long,
+    val name: String,
+    val isActive: Boolean,
+    val activeModel: String?,
+)
 
 @Dao
 interface ProviderDao {
 
     @Query("SELECT * FROM providers ORDER BY id ASC")
     fun observeAll(): Flow<List<ProviderEntity>>
+
+    @Query(
+        "SELECT p.id AS id, p.name AS name, p.isActive AS isActive, " +
+            "(SELECT m.model FROM provider_models m WHERE m.providerId = p.id AND m.isActive = 1 LIMIT 1) AS activeModel " +
+            "FROM providers p ORDER BY p.id ASC",
+    )
+    fun observeAllWithModel(): Flow<List<ProviderWithActiveModel>>
 
     @Query("SELECT * FROM providers WHERE isActive = 1 LIMIT 1")
     fun observeActive(): Flow<ProviderEntity?>
@@ -100,11 +113,8 @@ interface ProviderDao {
     @Insert
     suspend fun insert(provider: ProviderEntity): Long
 
-    @Query(
-        "UPDATE providers SET name = :name, baseUrl = :baseUrl, model = :model, " +
-            "reasoningSupport = :reasoningSupport WHERE id = :id",
-    )
-    suspend fun update(id: Long, name: String, baseUrl: String, model: String, reasoningSupport: ReasoningSupport)
+    @Query("UPDATE providers SET name = :name, baseUrl = :baseUrl WHERE id = :id")
+    suspend fun update(id: Long, name: String, baseUrl: String)
 
     @Query("DELETE FROM providers WHERE id = :id")
     suspend fun delete(id: Long)
@@ -121,6 +131,47 @@ interface ProviderDao {
 
     @Query("SELECT * FROM providers WHERE id != :id ORDER BY id ASC LIMIT 1")
     suspend fun firstOtherThan(id: Long): ProviderEntity?
+}
+
+@Dao
+interface ProviderModelDao {
+
+    @Query("SELECT * FROM provider_models WHERE providerId = :providerId ORDER BY id ASC")
+    fun observeForProvider(providerId: Long): Flow<List<ProviderModelEntity>>
+
+    @Query("SELECT * FROM provider_models WHERE providerId = :providerId ORDER BY id ASC")
+    suspend fun forProvider(providerId: Long): List<ProviderModelEntity>
+
+    @Query("SELECT * FROM provider_models WHERE providerId = :providerId AND isActive = 1 LIMIT 1")
+    suspend fun activeForProvider(providerId: Long): ProviderModelEntity?
+
+    @Query("SELECT COUNT(*) FROM provider_models WHERE providerId = :providerId")
+    suspend fun countForProvider(providerId: Long): Int
+
+    @Insert
+    suspend fun insert(model: ProviderModelEntity): Long
+
+    @Query("UPDATE provider_models SET model = :model WHERE id = :id")
+    suspend fun update(id: Long, model: String)
+
+    @Query("DELETE FROM provider_models WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM provider_models WHERE providerId = :providerId")
+    suspend fun deleteForProvider(providerId: Long)
+
+    /** Marks [id] the single active model within its provider. */
+    @Query(
+        "UPDATE provider_models SET isActive = CASE WHEN id = :id THEN 1 ELSE 0 END " +
+            "WHERE providerId = :providerId",
+    )
+    suspend fun setActiveForProvider(providerId: Long, id: Long)
+
+    @Query("UPDATE provider_models SET isActive = 0 WHERE providerId = :providerId")
+    suspend fun clearActive(providerId: Long)
+
+    @Query("SELECT * FROM provider_models WHERE id = :id")
+    suspend fun byId(id: Long): ProviderModelEntity?
 }
 
 /**
@@ -281,15 +332,17 @@ interface AttachmentDao {
         MessageEntity::class,
         MessageVersionEntity::class,
         ProviderEntity::class,
+        ProviderModelEntity::class,
         AttachmentEntity::class,
     ],
-    version = 8,
+    version = 10,
     exportSchema = false,
 )
 abstract class ChatDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
     abstract fun messageDao(): MessageDao
     abstract fun providerDao(): ProviderDao
+    abstract fun providerModelDao(): ProviderModelDao
     abstract fun attachmentDao(): AttachmentDao
 
     companion object {
@@ -371,6 +424,80 @@ abstract class ChatDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE providers ADD COLUMN reasoningSupport TEXT NOT NULL DEFAULT 'UNSPECIFIED'")
+            }
+        }
+
+        /**
+         * v9: one provider, many saved models. Each provider's existing model
+         * becomes that provider's first (active) model profile, keeping its
+         * declared reasoning support; model and reasoningSupport leave the
+         * provider row. API keys live in the key store keyed by provider id and
+         * are untouched.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `provider_models` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`providerId` INTEGER NOT NULL, `model` TEXT NOT NULL, " +
+                        "`reasoningSupport` TEXT NOT NULL, " +
+                        "`effortLevels` TEXT NOT NULL, " +
+                        "`minBudget` INTEGER NOT NULL, " +
+                        "`maxBudget` INTEGER NOT NULL, " +
+                        "`allowOff` INTEGER NOT NULL, " +
+                        "`allowAuto` INTEGER NOT NULL, " +
+                        "`isActive` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_provider_models_providerId` " +
+                        "ON `provider_models` (`providerId`)",
+                )
+                db.execSQL(
+                    "INSERT INTO `provider_models` " +
+                        "(`providerId`, `model`, `reasoningSupport`, `effortLevels`, " +
+                        "`minBudget`, `maxBudget`, `allowOff`, `allowAuto`, `isActive`) " +
+                        "SELECT `id`, `model`, `reasoningSupport`, 'LOW,MEDIUM,HIGH', " +
+                        "1, 32768, 1, 1, 1 FROM `providers` " +
+                        "WHERE TRIM(`model`) <> ''",
+                )
+                db.execSQL(
+                    "CREATE TABLE `providers_new` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, " +
+                        "`isActive` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "INSERT INTO `providers_new` (`id`, `name`, `baseUrl`, `isActive`) " +
+                        "SELECT `id`, `name`, `baseUrl`, `isActive` FROM `providers`",
+                )
+                db.execSQL("DROP TABLE `providers`")
+                db.execSQL("ALTER TABLE `providers_new` RENAME TO `providers`")
+            }
+        }
+
+        /**
+         * v10: reasoning capability moves out of storage and is detected from
+         * the model id instead, so the per-model declaration columns go away.
+         * Saved models keep their id, provider, model, and active flag.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE `provider_models_new` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`providerId` INTEGER NOT NULL, `model` TEXT NOT NULL, " +
+                        "`isActive` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "INSERT INTO `provider_models_new` (`id`, `providerId`, `model`, `isActive`) " +
+                        "SELECT `id`, `providerId`, `model`, `isActive` FROM `provider_models`",
+                )
+                db.execSQL("DROP TABLE `provider_models`")
+                db.execSQL("ALTER TABLE `provider_models_new` RENAME TO `provider_models`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_provider_models_providerId` " +
+                        "ON `provider_models` (`providerId`)",
+                )
             }
         }
     }

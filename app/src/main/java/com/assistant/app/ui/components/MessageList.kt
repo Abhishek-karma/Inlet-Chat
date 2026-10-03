@@ -324,10 +324,10 @@ private fun MessageItem(
             }
 
             if (menuOpen) {
-                NaraActionSheet(
+                InletActionSheet(
                     actions = buildList {
                         add(
-                            NaraAction(
+                            InletAction(
                                 label = copyLabel,
                                 icon = AppIcons.Copy,
                                 onClick = {
@@ -338,7 +338,7 @@ private fun MessageItem(
                         )
                         if (canSpeak) {
                             add(
-                                NaraAction(
+                                InletAction(
                                     label = speakLabel,
                                     icon = AppIcons.Speak,
                                     onClick = { onSpeakMessage?.invoke(message.id) },
@@ -347,7 +347,7 @@ private fun MessageItem(
                         }
                         if (canRegenerate) {
                             add(
-                                NaraAction(
+                                InletAction(
                                     label = regenerateLabel,
                                     icon = AppIcons.Renew,
                                     onClick = onRegenerate,
@@ -356,7 +356,7 @@ private fun MessageItem(
                         }
                         if (isUser) {
                             add(
-                                NaraAction(
+                                InletAction(
                                     label = editResendLabel,
                                     icon = AppIcons.Edit,
                                     onClick = { onEditAndResend(message.id, message.content) },

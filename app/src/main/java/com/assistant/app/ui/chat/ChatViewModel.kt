@@ -10,7 +10,7 @@ import com.assistant.app.data.ChatRepository
 import com.assistant.app.data.ChatStatus
 import com.assistant.app.data.ChatUiState
 import com.assistant.app.data.local.ConversationEntity
-import com.assistant.app.data.local.ProviderEntity
+import com.assistant.app.data.local.ProviderModelEntity
 import com.assistant.app.llm.model.ReasoningConfig
 import com.assistant.app.voice.VoiceInput
 import com.assistant.app.ui.history.ConversationSummary
@@ -36,8 +36,8 @@ class ChatViewModel(
     voiceInput: VoiceInput = VoiceInput.unavailable(),
     voiceOutput: VoiceOutput = VoiceOutput.unavailable(),
     isVoiceOutputEnabled: () -> Boolean = { false },
-    val providers: Flow<List<ProviderEntity>> = emptyFlow(),
-    private val activateProviderById: suspend (Long) -> Unit = {},
+    savedModels: Flow<List<ProviderModelEntity>> = emptyFlow(),
+    private val activateModelById: suspend (Long) -> Unit = {},
     private val attachmentIngester: AttachmentIngester? = null,
     val reasoningVisible: StateFlow<Boolean> = MutableStateFlow(true),
     voiceAutoPlay: () -> Boolean = { true },
@@ -77,7 +77,8 @@ class ChatViewModel(
             initialValue = emptyList(),
         )
 
-    val savedProviders: StateFlow<List<ProviderEntity>> = providers
+    /** Saved models of the active provider, for the drawer's model switcher. */
+    val savedModels: StateFlow<List<ProviderModelEntity>> = savedModels
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -95,7 +96,7 @@ class ChatViewModel(
                 when (state) {
                     is ChatLlmState.Ready -> {
                         repository.setNeedsSetup(false)
-                        repository.onThinkModelChanged(state.model, state.thinkCapability)
+                        repository.onThinkModelChanged(state.providerId, state.modelId, state.thinkCapability)
                     }
                     is ChatLlmState.NeedsSetup -> repository.setNeedsSetup(true)
                     is ChatLlmState.Loading -> Unit
@@ -162,8 +163,8 @@ class ChatViewModel(
         viewModelScope.launch { repository.renameConversation(id, title) }
     }
 
-    fun activateProvider(id: Long) {
-        viewModelScope.launch { activateProviderById(id) }
+    fun activateModel(modelId: Long) {
+        viewModelScope.launch { activateModelById(modelId) }
     }
 
     fun addImageAttachments(uris: List<Uri>) {
@@ -266,8 +267,8 @@ class ChatViewModel(
         private val voiceInput: VoiceInput = VoiceInput.unavailable(),
         private val voiceOutput: VoiceOutput = VoiceOutput.unavailable(),
         private val isVoiceOutputEnabled: () -> Boolean = { false },
-        private val providers: Flow<List<ProviderEntity>> = emptyFlow(),
-        private val activateProviderById: suspend (Long) -> Unit = {},
+        private val savedModels: Flow<List<ProviderModelEntity>> = emptyFlow(),
+        private val activateModelById: suspend (Long) -> Unit = {},
         private val attachmentIngester: AttachmentIngester? = null,
         private val reasoningVisible: StateFlow<Boolean> = MutableStateFlow(true),
         private val voiceAutoPlay: () -> Boolean = { true },
@@ -287,8 +288,8 @@ class ChatViewModel(
                 voiceInput,
                 voiceOutput,
                 isVoiceOutputEnabled,
-                providers,
-                activateProviderById,
+                savedModels,
+                activateModelById,
                 attachmentIngester,
                 reasoningVisible,
                 voiceAutoPlay,

@@ -1,10 +1,20 @@
 package com.assistant.app.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -18,19 +28,21 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.printToString
 import com.assistant.app.R
-import com.assistant.app.data.local.ProviderEntity
 import com.assistant.app.ui.chat.ChatScreen
-import com.assistant.app.ui.components.AssistantTopBar
+import com.assistant.app.ui.chat.isNearBottom
 import com.assistant.app.llm.ScriptedEvent
+import com.assistant.app.ui.components.ChatModelOption
 import com.assistant.app.ui.components.ComposerInputTag
 import com.assistant.app.ui.theme.ChatTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlinx.coroutines.runBlocking
 
 /**
  * Robolectric Compose test for the chat screen shell: top bar identity,
@@ -66,9 +78,14 @@ class ChatScreenShellTest {
             }
         }
 
-        // "Inlet Chat" appears in the top bar and the drawer sheet.
-        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.app_name))
-            .onFirst().assertIsDisplayed()
+        // The top bar carries the app identity only; the active model lives in the
+        // drawer switcher and must not appear in the chat surface.
+        val appName = composeRule.activity.getString(R.string.app_name)
+        assertTrue(
+            "The app name should be visible in the chat shell",
+            composeRule.onAllNodesWithText(appName).fetchSemanticsNodes().isNotEmpty(),
+        )
+        composeRule.onNodeWithText("test-model").assertDoesNotExist()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.chat_empty_statement)).assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription(
@@ -146,52 +163,96 @@ class ChatScreenShellTest {
     }
 
     @Test
-    fun providerSwitcherListsEverySavedProviderAndSelectsOne() {
-        var selectedId: Long? = null
-        val providers = listOf(
-            provider(id = 1L, name = "OpenAI", model = "gpt-4o"),
-            provider(id = 2L, name = "Local", model = "llama3"),
-        )
+    fun autoFollowOnlyStopsOnceTheUserScrollsBeyondTheThreshold() {
+        lateinit var listState: LazyListState
         composeRule.setContent {
             ChatTheme {
-                AssistantTopBar(
-                    title = "OpenAI",
-                    activeProvider = providers[0],
-                    savedProviders = providers,
-                    onProviderSelected = { selectedId = it },
-                )
+                listState = rememberLazyListState()
+                LazyColumn(
+                    state = listState,
+                    reverseLayout = true,
+                    modifier = Modifier.size(160.dp),
+                ) {
+                    items(20) { Box(Modifier.height(80.dp)) }
+                }
             }
         }
 
-        // The pill opens the switcher; both providers must be listed.
-        composeRule.onNodeWithText("OpenAI").performClick()
-        composeRule.onNodeWithText("Local").assertIsDisplayed()
-        composeRule.onNodeWithText("llama3").assertIsDisplayed()
+        // Pinned to the newest item: streaming would follow along.
+        composeRule.runOnIdle { assertTrue(listState.isNearBottom(0f)) }
 
-        // The inactive provider must be tappable: a non-active row that reads as
+        // A few pixels of drift (bounce, a short fling) still counts as following.
+        composeRule.runOnIdle { runBlocking { listState.scrollBy(40f) } }
+        composeRule.runOnIdle { assertTrue(listState.isNearBottom(120f)) }
+
+        // Past the threshold the user has taken over, so the app stops following.
+        composeRule.runOnIdle { runBlocking { listState.scrollBy(400f) } }
+        composeRule.runOnIdle { assertFalse(listState.isNearBottom(120f)) }
+    }
+
+    @Test
+    fun drawerSwitcherListsEverySavedModelAndSelectsOne() {
+        var selectedId: Long? = null
+        val models = listOf(
+            ChatModelOption(id = 1L, model = "gpt-4o", providerName = "OpenAI"),
+            ChatModelOption(id = 2L, model = "llama3", providerName = "Local"),
+        )
+        composeRule.setContent {
+            ChatTheme {
+                val drawerState = rememberDrawerState(DrawerValue.Open)
+                com.assistant.app.ui.components.AppDrawer(
+                    drawerState = drawerState,
+                    activeModel = "gpt-4o",
+                    isNewChat = true,
+                    onNewChat = {},
+                    onHistory = {},
+                    onSettings = {},
+                    savedModels = models,
+                    activeModelId = 1L,
+                    onModelSelected = { selectedId = it },
+                ) {
+                    Box(modifier = Modifier.size(100.dp))
+                }
+            }
+        }
+
+        // The active-model card opens the switcher; both models must be listed.
+        composeRule.onNodeWithText("gpt-4o").performClick()
+        composeRule.onNodeWithText("llama3").assertIsDisplayed()
+        composeRule.onNodeWithText("Local").assertIsDisplayed()
+
+        // The inactive model must be tappable: a non-active row that reads as
         // "not selected" would be disabled, and the switcher would be a dead end.
-        composeRule.onNodeWithText("Local").performClick()
+        composeRule.onNodeWithText("llama3").performClick()
         assertEquals(2L, selectedId)
     }
 
     @Test
-    fun providerSwitcherHandlesALongModelIdWithoutOverlapping() {
-        val providers = listOf(
-            provider(id = 1L, name = "OpenAI", model = "com.google.android.tts:en-us-natural:en-US"),
-            provider(id = 2L, name = "Local", model = "a-fairly-long-self-hosted-model-identifier"),
+    fun drawerSwitcherHandlesALongModelIdWithoutOverlapping() {
+        val models = listOf(
+            ChatModelOption(id = 1L, model = "gpt-4o", providerName = "OpenAI"),
+            ChatModelOption(id = 2L, model = "a-fairly-long-self-hosted-model-identifier", providerName = "Local"),
         )
         composeRule.setContent {
             ChatTheme {
-                AssistantTopBar(
-                    title = "OpenAI",
-                    activeProvider = providers[0],
-                    savedProviders = providers,
-                    onProviderSelected = {},
-                )
+                val drawerState = rememberDrawerState(DrawerValue.Open)
+                com.assistant.app.ui.components.AppDrawer(
+                    drawerState = drawerState,
+                    activeModel = "gpt-4o",
+                    isNewChat = true,
+                    onNewChat = {},
+                    onHistory = {},
+                    onSettings = {},
+                    savedModels = models,
+                    activeModelId = 1L,
+                    onModelSelected = {},
+                ) {
+                    Box(modifier = Modifier.size(100.dp))
+                }
             }
         }
 
-        composeRule.onNodeWithText("OpenAI").performClick()
+        composeRule.onNodeWithText("gpt-4o").performClick()
 
         composeRule.onNodeWithText("Local").assertIsDisplayed()
         composeRule.onNodeWithText("a-fairly-long-self-hosted-model-identifier", substring = true)
@@ -241,12 +302,4 @@ class ChatScreenShellTest {
                 "spend a second request on it, padded out well past the minimum " +
                 "length that the generator uses before it decides to bother."
     }
-
-    private fun provider(id: Long, name: String, model: String) = ProviderEntity(
-        id = id,
-        name = name,
-        baseUrl = "https://example.com",
-        model = model,
-        isActive = id == 1L,
-    )
 }
